@@ -1407,9 +1407,10 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
             Prefetch('articoli', queryset=Articolo.objects.filter(pk__in=articoli_concessi).order_by('nome'))
         ).order_by('ordine')
         context['mesi'] = [
-            {'numero': i, 'nome': datetime(1900, i, 1).strftime('%B')}
+            {'numero': i, 'nome': _date(datetime(1900, i, 1), "F")}
             for i in range(1, 13)
         ]
+        # _date è il template per la formattazione date in django, così uso il locale di django direttamente.
         return context
 
     def post(self, request, *args, **kwargs):
