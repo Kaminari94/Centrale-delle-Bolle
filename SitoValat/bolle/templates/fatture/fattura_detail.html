@@ -17,39 +17,41 @@
 </div>
 
 <h2>Righe della Fattura</h2>
-<table class="table table-bordered table-striped">
-    <thead>
-        <tr>
-            <th>#</th>
-            <th>Codice Articolo</th>
-            <th>Descrizione</th>
-            <th>Prezzo Unitario</th>
-            <th>Q.tà</th>
-            <th>IVA</th>
-            <th>Imponibile</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for riga in fattura.righe.all %}
+<div class="table table-responsive">
+    <table class="table table-bordered table-striped table-responsive">
+        <thead>
             <tr>
-                <td>{{ forloop.counter }}</td>
-                <td>{{ riga.articolo.nome }}</td>
-                <td>{{ riga.articolo.descrizione }}</td>
-                <td>{{ riga.prezzo }} €</td>
-                <td>{{ riga.quantita }}</td>
-                <td>{{ riga.get_iva_display }}</td>
-                <td>{{ riga.imp|floatformat:2 }} €</td>
+                <th>#</th>
+                <th>Codice Articolo</th>
+                <th>Descrizione</th>
+                <th>Prezzo Unitario</th>
+                <th>Q.tà</th>
+                <th>IVA</th>
+                <th>Imponibile</th>
             </tr>
-        {% empty %}
-            <tr>
-                <td colspan="7" class="text-center">Nessuna riga nella fattura.</td>
-            </tr>
-        {% endfor %}
-    </tbody>
-</table>
+        </thead>
+        <tbody>
+            {% for riga in fattura.righe.all %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td>{{ riga.articolo.nome }}</td>
+                    <td>{{ riga.articolo.descrizione }}</td>
+                    <td>{{ riga.prezzo }} €</td>
+                    <td>{{ riga.quantita }}</td>
+                    <td>{{ riga.get_iva_display }}</td>
+                    <td>{{ riga.imp|floatformat:2 }} €</td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center">Nessuna riga nella fattura.</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
 
 <h3>Totale Fattura</h3>
-<div class="container-fluid">
+<div class="table table-responsive">
     <table class="table table-sm table-bordered table-responsive">
         <tr>
             <td><strong>Imponibile 4%:</strong></td>
