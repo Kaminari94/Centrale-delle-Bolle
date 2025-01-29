@@ -1,0 +1,79 @@
+{% extends 'bolle/homepage.html' %}
+
+{% block title %}Modifica Carico{% endblock %}
+
+{% block content %}
+<h1>Modifica Carico</h1>
+
+<h2>Aggiungi Riga</h2>
+<form method="post">
+    {% csrf_token %}
+    <label for="articolo">Articolo:</label>
+    <select name="articolo" class="form-select">
+        {% for categoria in categorie %}
+            <optgroup label="{{ categoria.nome }}">
+                {% for articolo in categoria.articoli.all %}
+                    <option value="{{ articolo.id }}">{{ articolo.nome }} - {{articolo.descrizione}}</option>
+                {% endfor %}
+            </optgroup>
+        {% endfor %}
+    </select>
+    <label for="quantita">Quantità:</label>
+    <input type="number" name="quantita" min="1" class="form-control">
+
+    <label for="lotto">Lotto:</label>
+    <input type="text" name="lotto" class="form-control" placeholder="Inserire lotto o lasciare vuoto per generare">
+
+    <button type="submit" name="add_riga" class="btn btn-success mt-2">Aggiungi</button>
+
+</form>
+{% if messages %}
+<div class="container mt-4">
+    <div class="alert alert-danger">
+        {% for message in messages %}
+            <p>{{ message }}</p>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<h2>Righe Correnti</h2>
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Codice</th>
+            <th>Descrizione</th>
+            <th>Lotto</th>
+            <th>Quantità</th>
+            <th>Azioni</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for riga in righe %}
+            <tr>
+                <td>{{ riga.articolo.nome }}</td>
+                <td>{{ riga.articolo.descrizione }}</td>
+                <td>{{ riga.lotto }}</td>
+                <td>{{ riga.quantita }}</td>
+                <td>
+                    <form method="post" action="{% url 'riga-carico-delete' riga.pk %}" style="display: inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger btn-sm">Elimina</button>
+                    </form>
+                </td>
+            </tr>
+        {% empty %}
+            <tr>
+                <td colspan="5" class="text-center">Nessuna riga aggiunta.</td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div class="mt-4 mb-5">
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit" name="confirm" class="btn btn-primary">Conferma</button>
+    </form>
+</div>
+{% endblock %}

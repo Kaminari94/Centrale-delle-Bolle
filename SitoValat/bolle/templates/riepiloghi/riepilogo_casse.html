@@ -1,0 +1,105 @@
+{% extends 'bolle/homepage.html' %}
+
+{% block title %}Riepilogo Giornaliero{% endblock %}
+
+{% block content %}
+<head>
+    <style>
+        table td { text-align: end; }
+        table tr:last-child { text-align: end; }
+        @media print {
+            /* Rimuovi elementi non necessari */
+            .d-print-none {
+                display: none !important;
+            }
+
+            /* Ottimizza la tabella */
+            .table {
+                width: 100%;
+            }
+            .container {
+                width: 100%;
+            }
+
+            /* Imposta margini e dimensioni */
+            body {
+                margin: 0;
+                font-size: 12pt;
+            }
+        }
+    </style>
+</head>
+
+<h3><b>Riepilogo imballaggi:</b></h3>
+<b>Zona:</b> {{ zona }} <b>da:</b> {{ data_inizio }} <b>a:</b> {{ data_fine }}
+
+<div class="row mt-3 mb-3">
+<div class="container mb-3" style="max-width:500px">
+<table class="table table-bordered table-responsive table-hover">
+    <thead class="bg-secondary bg-opacity-25">
+        <tr>
+            <th>Data</th>
+            <th>Casse Caricate</th>
+            <th>Casse Rese</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for riga in riepilogo %}
+        <tr>
+            <td>{{ riga.data|date:"d F Y" }}</td>
+            <td>{{ riga.casse_caricate }}</td>
+            <td>{{ riga.casse_rese }}</td>
+        </tr>
+        {% endfor %}
+        <tr>
+            <td>Somma Totale</td>
+            <td>{{ somma_cest_car }}</td>
+            <td>{{ somma_cest_res }}</td>
+        </tr>
+        <tr>
+            <td colspan="2">
+                <span style="float:right;"><i>Totale Differenza:</i></span>
+            </td>
+            <td>
+                {{ diff_casse }}
+            </td>
+        </tr>
+    </tbody>
+</table>
+</div>
+<div class="container mb-3" style="max-width:500px">
+<table class="table table-bordered table-responsive table-hover">
+    <thead class="bg-secondary bg-opacity-25">
+        <tr>
+            <th>Data</th>
+            <th>EPAL Caricati</th>
+            <th>EPAL Resi</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for riga in riepilogo %}
+        <tr>
+            <td>{{ riga.data|date:"d F Y" }}</td>
+            <td>{{ riga.banc_caricati }}</td>
+            <td>{{ riga.banc_resi }}</td>
+        </tr>
+        {% endfor %}
+        <tr>
+            <td>Somma Totale</td>
+            <td>{{ somma_banc_car }}</td>
+            <td>{{ somma_banc_res }}</td>
+        </tr>
+        <tr>
+            <td colspan="2">
+                <span style="float:right;"><i>Totale Differenza:</i></span>
+            </td>
+            <td>
+                {{ diff_bancali }}
+            </td>
+        </tr>
+    </tbody>
+</table>
+</div>
+</div>
+
+{% endblock %}

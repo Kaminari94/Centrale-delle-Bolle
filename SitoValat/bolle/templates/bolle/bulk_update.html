@@ -1,0 +1,13 @@
+{% extends 'bolle/homepage.html' %}
+
+{% block title %}Bulk Update{% endblock %}
+
+{% block content %}
+
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Aggiorna Prezzi</button>
+</form>
+
+{% endblock %}

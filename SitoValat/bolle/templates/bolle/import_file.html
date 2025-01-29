@@ -1,0 +1,42 @@
+{% extends 'bolle/homepage.html' %}
+
+{% block content %}
+<div class="container">
+    <h2>Importa File</h2>
+
+    {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="form-group">
+            <label for="file">Seleziona il file:</label>
+            <input type="file" name="file" id="file" class="form-control" required>
+        </div>
+        <button type="submit" class="btn btn-primary mt-3">Analizza</button>
+    </form>
+
+    {% if header %}
+        <hr>
+        <h3>Riepilogo</h3>
+        <p><strong>Header:</strong> {{ header }}</p>
+        <p><strong>Clienti:</strong> {{ clienti|length }} clienti trovati</p>
+        <p><strong>Bolle:</strong> {{ bolle|length }} bolle trovate</p>
+        <p><strong>Articoli:</strong> {{ articoli|length }} articoli trovati</p>
+
+        <h4>Dettagli Clienti:</h4>
+        <ul>
+            {% for cliente in clienti %}
+                <li>{{ cliente.nome_cliente }} - {{ cliente.indirizzo }}</li>
+            {% endfor %}
+        </ul>
+
+        <form action="{% url 'confirm-import' %}" method="post">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-success">Conferma Importazione</button>
+        </form>
+        <a href="{% url 'import-file' %}" class="btn btn-secondary">Annulla</a>
+    {% endif %}
+</div>
+{% endblock %}

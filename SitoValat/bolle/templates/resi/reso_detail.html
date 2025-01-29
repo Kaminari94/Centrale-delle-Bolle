@@ -1,0 +1,40 @@
+{% extends 'bolle/homepage.html' %}
+{% block title %}Dettaglio Reso{% endblock %}
+{% block content %}
+<h2>Dettaglio Reso</h2>
+<p><strong>Zona:</strong> {{ reso.zona.nome }}</p>
+<p><strong>Data:</strong> {{ reso.data }}</p>
+<p><strong>Note:</strong> {{ reso.note|default:"-" }}</p>
+
+<h3>Righe del Reso</h3>
+<table class="table table-bordered table-striped">
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Articolo</th>
+            <th>Descrizione</th>
+            <th>Quantità</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for riga in reso.righe.all %}
+        <tr>
+            <td>{{ forloop.counter }}</td>
+            <td>{{ riga.articolo.nome }}</td>
+            <td>{{ riga.articolo.descrizione }}</td>
+            <td>{{ riga.quantita }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="4" class="text-center">Nessuna riga aggiunta.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div class="mt-4 mb-5">
+    <a href="{% url 'resi-list' %}" class="btn btn-secondary">Torna alla Lista</a>
+    <a href="{% url 'reso-update' reso.pk %}" class="btn btn-warning">Modifica</a>
+    <a href="{% url 'reso-delete' reso.pk %}" class="btn btn-danger">Elimina</a>
+</div>
+{% endblock %}

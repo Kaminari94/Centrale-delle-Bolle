@@ -1,0 +1,16 @@
+{% extends 'bolle/homepage.html' %}
+
+{% block title %}Conferma Eliminazione{% endblock %}
+
+{% block content %}
+<h1>Sei sicuro di voler eliminare questa fattura?</h1>
+<p><strong>Numero:</strong> {{ object.numero }}</p>
+<p><strong>Cliente:</strong> {{ object.cliente }}</p>
+<p><strong>Tipo Fattura:</strong> {{ object.tipo_fattura }}</p>
+
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Conferma Eliminazione</button>
+    <a href="{% url 'fatture-list' %}" class="btn btn-secondary">Annulla</a>
+</form>
+{% endblock %}

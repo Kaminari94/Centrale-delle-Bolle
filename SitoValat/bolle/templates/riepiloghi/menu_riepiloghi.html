@@ -1,0 +1,334 @@
+{% extends 'bolle/homepage.html' %}
+
+{% block title %}Menu Riepiloghi{% endblock %}
+
+{% block content %}
+<h1>Menu Riepiloghi</h1>
+
+{% if messages %}
+<div class="container mt-4">
+    <div class="alert alert-danger">
+        {% for message in messages %}
+            <p>{{ message }}</p>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="d-none d-lg-block">
+    <div class="row mt-3">
+        <!-- Colonna 1: Pulsanti (25%) -->
+        <div class="col-3">
+            <div class="container mt-4">
+                <button class="btn btn-primary mb-3 w-100" type="button" data-bs-toggle="collapse" data-bs-target="#giornCollapse" aria-expanded="false" aria-controls="giornCollapse">
+                    Conteggio Giornaliero
+                </button>
+                <button class="btn btn-primary mb-3 w-100" type="button" data-bs-toggle="collapse" data-bs-target="#artCollapse" aria-expanded="false" aria-controls="artCollapse">
+                    Articoli per Cliente
+                </button>
+                <button class="btn btn-primary mb-3 w-100" type="button" data-bs-toggle="collapse" data-bs-target="#ClsCollapse" aria-expanded="false" aria-controls="ClsCollapse">
+                    Costo Articoli Venduti CLS
+                </button>
+                <button class="btn btn-primary mb-3 w-100" type="button" data-bs-toggle="collapse" data-bs-target="#casseCollapse" aria-expanded="false" aria-controls="casseCollapse">
+                    Casse Vuote
+                </button>
+            </div>
+        </div>
+
+        <!-- Colonna 2: Card (75%) -->
+        <div class="col-9 mt-4">
+            <!-- Card: Conteggio Giornaliero -->
+            <div class="collapse" id="giornCollapse">
+                <div class="card mb-3">
+                    <div class="card-header">Conteggio Giornaliero</div>
+                    <div class="card-body">
+                        <form method="get" action="{% url 'riepilogo-giornaliero' %}">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="data_giorno" class="form-label">Seleziona Data:</label>
+                                    <input type="date" id="data_giorno" name="data_giorno" class="form-control">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="zona" class="form-label">Seleziona Zona:</label>
+                                    <select id="zona" name="zona" class="form-select">
+                                        {% for zona in zone %}
+                                            <option value="{{ zona.id }}">{{ zona.nome }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Visualizza Conteggio Giornaliero</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card: Articoli per Cliente -->
+            <div class="collapse" id="artCollapse">
+                <div class="card mb-3">
+                    <div class="card-header">Riepilogo Articoli per Cliente</div>
+                    <div class="card-body">
+                        <form method="get" action="{% url 'riepilogo-cliente' %}">
+                            <div class="row mb-3">
+                                <div class="col-md-5">
+                                    <label for="cliente" class="form-label">Seleziona Cliente:</label>
+                                    <select id="cliente" name="cliente_id" class="form-select">
+                                        <option value="">Selezionare un cliente...</option>
+                                    {% for cliente in clienti %}
+                                        <option value="{{ cliente.id }}">{{ cliente.nome }} - {{ cliente.via }}</option>
+                                    {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="data_inizio" class="form-label">Data Inizio:</label>
+                                    <input type="date" id="data_inizio" name="data_inizio" class="form-control">
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="data_fine" class="form-label">Data Fine:</label>
+                                    <input type="date" id="data_fine" name="data_fine" class="form-control">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Visualizza Riepilogo Articoli</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card: Casse e Bancali -->
+            <div class="collapse" id="casseCollapse">
+                <div class="card mb-3">
+                    <div class="card-header">Riepilogo Casse e Bancali EPAL</div>
+                    <div class="card-body">
+                        <form method="get" action="{% url 'riepilogo-casse' %}">
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label for="data_inizio" class="form-label">Data Inizio:</label>
+                                    <input type="date" id="data_inizio" name="data_inizio" class="form-control">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="data_fine" class="form-label">Data Fine:</label>
+                                    <input type="date" id="data_fine" name="data_fine" class="form-control">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="zona" class="form-label">Seleziona Zona:</label>
+                                    <select id="zona" name="zona" class="form-select">
+                                        {% for zona in zone %}
+                                            <option value="{{ zona.id }}">{{ zona.nome }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <table class="table table-hover table-responsive">
+                                    <thead>
+                                        <tr>
+                                            <th><i>Riep. veloce per mese di {{ oggi|date:"F" }}:</i></th>
+                                            <th>Casse</th>
+                                            <th>Bancali</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>Caricati</td>
+                                            <td>{{ casse_car }}</td>
+                                            <td>{{ bancali_car }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Scaricati</td>
+                                            <td>{{ casse_res }}</td>
+                                            <td>{{ bancali_res }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Diff:</td>
+                                            <td>{{ diff_casse }}</td>
+                                            <td>{{ diff_bancali }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Visualizza Riepilogo Casse Dettagliato</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card: Articoli Venduti CLS -->
+            <div class="collapse" id="ClsCollapse">
+                <div class="card mb-3">
+                    <div class="card-header">Riepilogo Costo Articoli Venduti per CLS</div>
+                    <div class="card-body">
+                        <form method="get" action="{% url 'riepilogo-cls' %}">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="data_inizio" class="form-label">Data Inizio:</label>
+                                    <input type="date" id="data_inizio" name="data_inizio" class="form-control">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="data_fine" class="form-label">Data Fine:</label>
+                                    <input type="date" id="data_fine" name="data_fine" class="form-control">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">Visualizza Riepilogo Articoli CLS</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="d-grid gap-2 d-lg-none">
+
+            <div class="container mt-4">
+                <button class="btn btn-primary mb-3 w-100" type="button" data-bs-toggle="collapse" data-bs-target="#giornCollapse" aria-expanded="false" aria-controls="giornCollapse">
+                    Conteggio Giornaliero
+                </button>
+                <button class="btn btn-primary mb-3 w-100" type="button" data-bs-toggle="collapse" data-bs-target="#artCollapse" aria-expanded="false" aria-controls="artCollapse">
+                    Articoli per Cliente
+                </button>
+                <button class="btn btn-primary mb-3 w-100" type="button" data-bs-toggle="collapse" data-bs-target="#ClsCollapse" aria-expanded="false" aria-controls="ClsCollapse">
+                    Costo Articoli Venduti CLS
+                </button>
+                <button class="btn btn-primary mb-3 w-100" type="button" data-bs-toggle="collapse" data-bs-target="#casseCollapse" aria-expanded="false" aria-controls="casseCollapse">
+                    Casse Vuote
+                </button>
+
+            <!-- Card: Conteggio Giornaliero -->
+            <div class="collapse" id="giornCollapse">
+                <div class="card mb-3">
+                    <div class="card-header">Conteggio Giornaliero</div>
+                    <div class="card-body">
+                        <form method="get" action="{% url 'riepilogo-giornaliero' %}">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="data_giorno" class="form-label">Seleziona Data:</label>
+                                    <input type="date" id="data_giorno" name="data_giorno" class="form-control">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="zona" class="form-label">Seleziona Zona:</label>
+                                    <select id="zona" name="zona" class="form-select">
+                                        {% for zona in zone %}
+                                            <option value="{{ zona.id }}">{{ zona.nome }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">Visualizza Conteggio Giornaliero</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card: Articoli per Cliente -->
+            <div class="collapse" id="artCollapse">
+                <div class="card mb-3">
+                    <div class="card-header">Riepilogo Articoli per Cliente</div>
+                    <div class="card-body">
+                        <form method="get" action="{% url 'riepilogo-cliente' %}">
+                            <div class="row mb-3">
+                                <div class="col-md-5">
+                                    <label for="cliente" class="form-label">Seleziona Cliente:</label>
+                                    <select id="cliente" name="cliente_id" class="form-select">
+                                        <option value="">Selezionare un cliente...</option>
+                                    {% for cliente in clienti %}
+                                        <option value="{{ cliente.id }}">{{ cliente.nome }} - {{ cliente.via }}</option>
+                                    {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="data_inizio" class="form-label">Data Inizio:</label>
+                                    <input type="date" id="data_inizio" name="data_inizio" class="form-control">
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="data_fine" class="form-label">Data Fine:</label>
+                                    <input type="date" id="data_fine" name="data_fine" class="form-control">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">Visualizza Riepilogo Articoli</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card: Casse e Bancali -->
+            <div class="collapse" id="casseCollapse">
+                <div class="card mb-3">
+                    <div class="card-header">Riepilogo Casse e Bancali EPAL</div>
+                    <div class="card-body">
+                        <form method="get" action="{% url 'riepilogo-casse' %}">
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label for="data_inizio" class="form-label">Data Inizio:</label>
+                                    <input type="date" id="data_inizio" name="data_inizio" class="form-control">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="data_fine" class="form-label">Data Fine:</label>
+                                    <input type="date" id="data_fine" name="data_fine" class="form-control">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="zona" class="form-label">Seleziona Zona:</label>
+                                    <select id="zona" name="zona" class="form-select">
+                                        {% for zona in zone %}
+                                            <option value="{{ zona.id }}">{{ zona.nome }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <table class="table table-hover table-responsive">
+                                    <thead>
+                                        <tr>
+                                            <th><i>Riep. veloce per mese di {{ oggi|date:"F" }}:</i></th>
+                                            <th>Casse</th>
+                                            <th>Bancali</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>Caricati</td>
+                                            <td>{{ casse_car }}</td>
+                                            <td>{{ bancali_car }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Scaricati</td>
+                                            <td>{{ casse_res }}</td>
+                                            <td>{{ bancali_res }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Diff:</td>
+                                            <td>{{ diff_casse }}</td>
+                                            <td>{{ diff_bancali }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Visualizza Riepilogo Casse Dettagliato</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card: Articoli Venduti CLS -->
+            <div class="collapse" id="ClsCollapse">
+                <div class="card mb-3">
+                    <div class="card-header">Riepilogo Costo Articoli Venduti per CLS</div>
+                    <div class="card-body">
+                        <form method="get" action="{% url 'riepilogo-cls' %}">
+                            <div class="row mb-3">
+                                <div class="col-md-3">
+                                    <label for="data_inizio" class="form-label">Data Inizio:</label>
+                                    <input type="date" id="data_inizio" name="data_inizio" class="form-control">
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="data_fine" class="form-label">Data Fine:</label>
+                                    <input type="date" id="data_fine" name="data_fine" class="form-control">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">Visualizza Riepilogo Articoli CLS</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+    </div>
+</div>
+{% endblock %}

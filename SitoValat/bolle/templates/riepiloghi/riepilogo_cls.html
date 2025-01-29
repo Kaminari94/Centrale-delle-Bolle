@@ -1,0 +1,51 @@
+{% extends 'bolle/homepage.html' %}
+
+{% block title %}Riepilogo Costo Articoli CLS{% endblock %}
+
+{% block content %}
+<h3><b>Riepilogo Costo degli Articoli Venduti a Clienti CLS</b></h3>
+<br><b>Concessionario:</b> {{ concession }}
+<br><b>Da:</b> {{ data_inizio|date:"l, d E Y" }}
+<br><b>A:</b> {{ data_fine|date:"l, d E Y" }}
+<br>
+<div class="accordion mt-3 mb-5" id="accordionBasic">
+        <div class="accordion-item">
+        <h2 class="accordion-header" id="heading9999">
+            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse9999" aria-expanded="true" aria-controls="collapse9999">
+                Totali per Articolo
+            </button>
+        </h2>
+        <div id="collapse9999" class="accordion-collapse collapse show" aria-labelledby="heading9999" data-bs-parent="#accordionBasic">
+            <div class="accordion-body me-3 ms-0">
+                <table class="table table-sm table-hover table-responsive">
+                    <thead>
+                        <tr>
+                            <th>Articolo</th>
+                            <th>Descrizione</th>
+                            <th>Quantità</th>
+                            <th><span style="float: right;">Euro</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for articolo, dettagli in riepilogo.items %}
+                        <tr>
+                            <td>{{ articolo }}</td>
+                            <td><span class="small">{{ dettagli.descrizione }}</span></td>
+                            <td>{{ dettagli.totale_quant }}</td>
+                            <td class="text-nowrap"><span style="float:right">€ {{ dettagli.totale_euro|floatformat:2 }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <th align="right">Totale:</th>
+                            <th colspan="3"><span style="float: right;"> € {{ totale_euro }}</span></th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

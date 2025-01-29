@@ -1,0 +1,136 @@
+{% extends 'bolle/homepage.html' %}
+
+{% block title %}Lista Fatture{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap mb-3">
+    <h1>Lista Fatture
+    <a href="{% url 'fattura-create' %}" class="btn btn-lg btn-success"><i class="bi bi-file-earmark-plus"></i> Nuova</a></h1>
+</div>
+{% if messages %}
+<div class="row">
+    <div col="col-md-3">
+        {% for message in messages %}
+            <div class="alert alert-danger">{{ message }}</div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Form per i filtri -->
+<form method="get" class="mb-4">
+    <div class="row">
+        <!-- Filtro Tipo Documento -->
+        <div class="col-md-2">
+            <label for="tipo_fattura" class="form-label">Tipo Documento</label>
+            <select name="tipo_fattura" id="tipo_fattura" class="form-select">
+                <option value="">Tutti</option>
+                {% for tipo in tipi_fattura %}
+                    <option value="{{ tipo.id }}" {% if tipo.id|stringformat:"s" == tipo_fattura_id|stringformat:"s" %}selected{% endif %}>
+                        {{ tipo.tipo }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Filtro Data Inizio -->
+        <div class="col-md-3">
+            <label for="data_inizio" class="form-label">Data Inizio</label>
+            <input type="date" id="data_inizio" name="data_inizio" class="form-control" value="{{ data_inizio }}">
+        </div>
+
+        <!-- Filtro Data Fine -->
+        <div class="col-md-3">
+            <label for="data_fine" class="form-label">Data Fine</label>
+            <input type="date" id="data_fine" name="data_fine" class="form-control" value="{{ data_fine }}">
+        </div>
+
+        <!-- Pulsanti -->
+        <div class="col-md-4 ml-3 p-0 d-flex align-items-end">
+            <div class="btn-group mt-2" role="group" aria-label="Intervallo di tempo">
+              <input type="radio" class="btn-check" name="btnradio" id="btnradio1" autocomplete="off" onclick="selezionaIntervallo('oggi')">
+              <label class="btn btn-sm btn-primary" for="btnradio1">Oggi</label>
+
+              <input type="radio" class="btn-check" name="btnradio" id="btnradio2" autocomplete="off" onclick="selezionaIntervallo('settimana')">
+              <label class="btn btn-sm btn-primary" for="btnradio2">Settimana</label>
+
+              <input type="radio" class="btn-check" name="btnradio" id="btnradio3" autocomplete="off" onclick="selezionaIntervallo('mese')">
+              <label class="btn btn-sm btn-primary" for="btnradio3">Mese</label>
+            </div>
+            <button type="submit" class="btn btn-primary mt-3 me-2"><i class="bi bi-filter-left"></i> Filtra</button>
+            <a href="{% url 'fatture-list' %}" class="btn btn-dark mt-3 me-2"><i class="bi bi-ban"></i> Reset Filtri</a>
+
+        </div>
+    </div>
+</form>
+
+<!-- Tabella delle Fatture -->
+<div class="d-none d-lg-block">
+<table class="table table-bordered table-striped">
+    <thead>
+        <tr>
+            <th>Tipo</th>
+            <th>N.</th>
+            <th>Cliente</th>
+            <th>Data</th>
+            <th>Azioni</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for fattura in fatture %}
+            <tr>
+                <td>{{ fattura.tipo_fattura.descrizione }}</td>
+                <td>{{ fattura.numero }}</td>
+                <td>
+                    <div>
+                        <a style="color: black; text-decoration: none;" href="{% url 'fattura-detail' fattura.pk %}">{{ fattura.cliente.nome }}<br>{{ fattura.cliente.via }}</a>
+                    </div>
+                </td>
+                <td>{{ fattura.data|date:"d/m/Y" }}</td>
+                <td>
+                    <a href="{% url 'fattura-detail' fattura.pk %}" class="btn btn-sm btn-primary"><i class="bi bi-folder2-open"></i> Apri</a>
+                    <a href="{% url 'fattura-stampa' fattura.pk %}" class="btn btn-sm btn-success" target="_blank"><i class="bi bi-printer"></i> Stampa</a>
+                    <a href="{% url 'fattura-stampa' fattura.pk %}" class="btn btn-sm btn-dark"><i class="bi bi-download"></i> Scarica XML</a>
+                    <a href="{% url 'fattura-update' fattura.pk %}" class="btn btn-sm btn-warning"><i class="bi bi-pencil"></i> Modifica</a>
+                    <a href="{% url 'fattura-delete' fattura.pk %}" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i> Elimina</a>
+                </td>
+            </tr>
+        {% empty %}
+            <tr>
+                <td colspan="5" class="text-center">Nessuna fattura trovata{% if data_inizio %} dal {{ data_inizio }} {% endif %}{% if data_fine %}al {{ data_fine }}.{% endif %}</td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<!-- Card delle fatture per smartphone -->
+<div class="d-grid gap-2 d-lg-none">
+    {% for fattura in fatture %}
+    <div class="card">
+        <div class="card-header">
+            <span style="float: left;">{{ fattura.tipo_fattura.descrizione }} | N: {{ fattura.numero }}</span>
+            <span style="float: right;">{{ fattura.data|date:"d/m/Y" }}</span>
+        </div>
+        <div class="card-body">
+            <h5 class="card-title">
+                <strong>
+                    <a style="color: black; text-decoration: none;" href="{% url 'fattura-detail' fattura.pk %}">{{ fattura.cliente.nome }}</a>
+                </strong>
+            </h5>
+            <p class="card-text">{{ fattura.cliente.via }}</p>
+            <div class="d-grid gap-2 d-lg-none">
+                <a href="{% url 'fattura-detail' fattura.pk %}" class="btn btn-sm btn-primary"><i class="bi bi-folder2-open"></i> Apri</a>
+                <a href="{% url 'fattura-stampa' fattura.pk %}" class="btn btn-sm btn-success" target="_blank"><i class="bi bi-printer"></i> Stampa</a>
+                <a href="{% url 'fattura-stampa' fattura.pk %}" class="btn btn-sm btn-success" target="_blank"><i class="bi bi-printer"></i> Scarica XML</a>
+                <a href="{% url 'fattura-update' fattura.pk %}" class="btn btn-sm btn-warning"><i class="bi bi-pencil"></i> Modifica</a>
+                <a href="{% url 'fattura-delete' fattura.pk %}" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i> Elimina</a>
+            </div>
+        </div>
+        <div class="card-footer text-muted">
+            {{ fattura.note|default:'-' }}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

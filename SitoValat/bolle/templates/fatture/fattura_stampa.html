@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% load static %}
+    <meta charset="UTF-8">
+    <!--<meta name="viewport" content="width=48mm, initial-scale=1.65, minimum-scale=1.65, maximum-scale=1.65, user-scalable=no">
+    -->
+    <meta name="viewport" content="width=48mm, initial-scale=1.0">
+    <title>Stampa Fattura</title>
+    <link rel="shortcut icon" type="image/png" href="{% static 'images/favicon-32x32.png' %}" >
+
+    <style>
+        @media only screen and (max-width: 600px) {
+
+            body {
+                transform: scale(1.9);
+                transform-origin: left top;
+                font-size: 10pt; /* Modifica la dimensione del font (solo del footer a questo punto)*/
+                font-family: Arial, sans-serif; /* Miglior font per la zjiang a quanto pare */
+                /* border: 1px solid red; DEBUG:  Mostra i margini */
+                margin-left: 0;
+                margin-right: 0;
+                max-width: 48mm;
+            }
+            p {
+                text-align: center;
+                max-width: inherit;
+            }
+        }
+        @media only screen and (max-width: 1200px) {
+            body {
+                font-size: 10pt; /* Modifica la dimensione del font (solo del footer a questo punto)*/
+                font-family: Arial, sans-serif; /* Miglior font per la zjiang a quanto pare */
+                /* border: 1px solid red; DEBUG:  Mostra i margini */
+                margin-left: 6mm;
+                margin-right: 10mm;
+                /* max-width: 48mm; */
+            }
+        }
+        /* Aggiungi uno stile per la tabella */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        /* Imposta uno stile per le celle */
+        td, th {
+            word-wrap: break-word;
+            overflow-wrap: break-word; /* Compatibilità aggiuntiva */
+            font-size: 8pt; /* Adatta la dimensione del font per far stare il contenuto */
+        }
+
+        .d-print-none {
+            display: none !important;
+        }
+
+        td.intest {
+            vertical-align: top;
+        }
+        td.lotto {
+            font-size: 7pt;
+        }
+
+        td.descr {
+            font-size: 7pt;
+        }
+        td.cod {
+            font-size: 7pt;
+        }
+        td.quant {
+            font-size: 9pt;
+        }
+
+        p.footer {
+            font-size: 12pt;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+        <!--<p align="center" class="d-print-none"><button style="width:100px;height:40px;font-size:14pt;" onclick="window.print()">Stampa</button></p>-->
+        <script>
+            window.onload = function() {
+                window.print();
+            };
+        </script>
+        <!-- Intestazione -->
+        <table>
+            <tr>
+                <td class="intest" align="left">
+                    <strong>{{ bolla.tipo_documento.concessionario.nome }}</strong>
+                    <br>{{ bolla.tipo_documento.concessionario.indirizzo }}
+                    <strong><br>P. IVA:</strong> {{ bolla.tipo_documento.concessionario.partita_iva }}
+                    <strong><br>Tel:</strong> {{ bolla.tipo_documento.concessionario.telefono }}
+                </td>
+                <td class="intest" align="right">
+                    {% if 'CLS' in bolla.tipo_documento.nome %}
+                        <strong>Spett.le: {{ bolla.cliente.proprietario.nome }}<br>Codice: {{ bolla.cliente.proprietario.codice }}</strong>
+                    {% endif %}
+                        <strong>Destinazione:<br> {{ bolla.cliente.nome }}</strong>
+                        <br><strong>Indirizzo:<br> </strong> {{ bolla.cliente.via }}
+                        {{ bolla.cliente.cap }} {{ bolla.cliente.citta }}
+                        <br><strong>P. IVA:</strong> {{ bolla.cliente.piva }}
+                    {% if 'CLS' in bolla.tipo_documento.nome %}
+                        <br><strong>Cod. Dest.:</strong> {{ bolla.cliente.codice }}
+                    {% endif %}
+                </td>
+            </tr>
+
+            <tr class="intest">
+                {% if 'CLS' in bolla.tipo_documento.nome %}
+                <td align="left">
+                    <strong>Bolla N°: <!--</strong>--> {{ bolla.numero }} / {{bolla.tipo_documento.nome}}<br><!--<strong>Tipo:</strong>-->Tipo: {{bolla.tipo_documento.descrizione}}<br><!--<strong>Data: </strong>-->Data: {{ bolla.data|date:"d/m/Y H:i" }}</strong>
+                </td>
+                <td align="right">
+                    <strong>Consegna per conto di:</strong>
+                        <br>{{ bolla.tipo_documento.concessionario.cons_conto.nome }}<br>
+                        {{ bolla.tipo_documento.concessionario.cons_conto.indirizzo }}
+                </td>
+                {% else %}
+                <td align="left">
+                    <strong>Data:  {{ bolla.data|date:"d/m/Y H:i" }} </strong>
+                </td>
+                <td align="right">
+                    <strong>Bolla N°:  {{ bolla.numero }} / {{bolla.tipo_documento.nome}} </strong>
+                    <br><strong>Tipo: {{bolla.tipo_documento.descrizione}} </strong>
+                </td>
+                {% endif %}
+            </tr>
+        </table>
+
+        <!-- Articoli -->
+
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Cod.</th>
+                    <th scope="col">Des.</th>
+                    <th scope="col" align="right">Lotto</th>
+                    <th scope="col" align="right">Qnt</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for riga in bolla.righe.all %}
+                <tr>
+                    <td class="cod"><strong>{{ riga.articolo.nome }}</strong></td>
+                    <td class="descr">{{ riga.articolo.descrizione }}</td>
+                    <td class="lotto" align="right">{{ riga.lotto }}</td>
+                    <td class="quant" align="right">{{ riga.quantita }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p align="center"><strong>Timbro e Firma:</strong></p>
+        <br>
+        <br>
+        <br>
+        <br>
+        <br>
+        <br>
+        <p class="footer" align="center">________________</p>
+<!--<br>Creato con la Centrale delle Bolle©<br>Un programma di Oscar Vasso -->
+</body>
+</html>

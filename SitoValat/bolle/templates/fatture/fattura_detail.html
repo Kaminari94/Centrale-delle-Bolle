@@ -1,0 +1,90 @@
+{% extends 'bolle/homepage.html' %}
+
+{% block title %}Dettaglio Fattura{% endblock %}
+
+{% block content %}
+<h2>Dettaglio Fattura</h2>
+<div class="container-fluid">
+    <strong>Cliente:</strong> {{ fattura.cliente.nome }}<br>
+    <strong>Indirizzo:</strong> {{ fattura.cliente.via }} {{ fattura.cliente.citta }}<br>
+    <strong>Numero Fattura:</strong> {{ fattura.numero }}<br>
+    <strong>Data:</strong> {{ fattura.data }}<br>
+    <strong>Concessionario:</strong> {{ fattura.concessionario.nome }}<br>
+    <strong>Condizioni di Pagamento:</strong> {{ fattura.get_condizioni_pagamento_display }}<br>
+    <strong>Modalità di Pagamento:</strong> {{ fattura.get_modalita_pagamento_display }}<br>
+    <strong>Scadenza Pagamento:</strong> {{ fattura.scadenza_pagamento }}<br>
+    <strong>Note:</strong> {{ fattura.note|default:"Nessuna nota" }}
+</div>
+
+<h2>Righe della Fattura</h2>
+<table class="table table-bordered table-striped">
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Codice Articolo</th>
+            <th>Descrizione</th>
+            <th>Prezzo Unitario</th>
+            <th>Q.tà</th>
+            <th>IVA</th>
+            <th>Imponibile</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for riga in fattura.righe.all %}
+            <tr>
+                <td>{{ forloop.counter }}</td>
+                <td>{{ riga.articolo.nome }}</td>
+                <td>{{ riga.articolo.descrizione }}</td>
+                <td>{{ riga.prezzo }} €</td>
+                <td>{{ riga.quantita }}</td>
+                <td>{{ riga.get_iva_display }}</td>
+                <td>{{ riga.imp|floatformat:2 }} €</td>
+            </tr>
+        {% empty %}
+            <tr>
+                <td colspan="7" class="text-center">Nessuna riga nella fattura.</td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<h3>Totale Fattura</h3>
+<div class="container-fluid">
+    <table class="table table-sm table-bordered table-responsive">
+        <tr>
+            <td><strong>Imponibile 4%:</strong></td>
+            <td>€ {{ fattura.totali.4.imp|default:"0.00"|floatformat:2 }}</td>
+            <td><strong>Imponibile 10%:</strong></td>
+            <td>€ {{ fattura.totali.10.imp|default:"0.00"|floatformat:2 }}</td>
+            <td><strong>Imponibile 22%:</strong></td>
+            <td>€ {{ fattura.totali.22.imp|default:"0.00"|floatformat:2 }}</td>
+        </tr>
+        <tr>
+            <td><strong>IVA 4%:</strong></td>
+            <td>€ {{ fattura.totali.4.iva|default:"0.00"|floatformat:2 }}</td>
+            <td><strong>IVA 10%:</strong></td>
+            <td>€ {{ fattura.totali.10.iva|default:"0.00"|floatformat:2 }}</td>
+            <td><strong>IVA 22%:</strong></td>
+            <td>€ {{ fattura.totali.22.iva|default:"0.00"|floatformat:2 }}</td>
+        </tr>
+        <tr>
+
+        </tr>
+
+    </table>
+    <h5><strong>Totale Documento:</strong> € {{ fattura.totali.tot|default:"0.00"|floatformat:2 }}</h5>
+</div>
+
+<div class="d-grid gap-2 d-lg-none mb-5">
+    <a href="{% url 'fatture-list' %}" class="btn btn-secondary">Torna alla Lista</a>
+    <a href="{% url 'fattura-stampa' fattura.pk %}" class="btn btn-success">Stampa</a>
+    <a href="{% url 'fattura-update' fattura.pk %}" class="btn btn-warning">Modifica</a>
+    <a href="{% url 'fattura-delete' fattura.pk %}" class="btn btn-danger">Elimina</a>
+</div>
+<div class="d-none d-lg-block mb-5">
+    <a href="{% url 'fatture-list' %}" class="btn btn-secondary">Torna alla Lista</a>
+    <a href="{% url 'fattura-stampa' fattura.pk %}" class="btn btn-success">Stampa</a>
+    <a href="{% url 'fattura-update' fattura.pk %}" class="btn btn-warning">Modifica</a>
+    <a href="{% url 'fattura-delete' fattura.pk %}" class="btn btn-danger">Elimina</a>
+</div>
+{% endblock %}

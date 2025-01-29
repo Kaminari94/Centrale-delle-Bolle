@@ -1,0 +1,12 @@
+{% extends 'bolle/homepage.html' %}
+{% block title %}Conferma Eliminazione{% endblock %}
+{% block content %}
+<h1>Sei sicuro di voler eliminare questo reso?</h1>
+<p><strong>Data:</strong> {{ object.data }}</p>
+<p><strong>Zona:</strong> {{ object.zona.nome }}</p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Conferma</button>
+    <a href="{% url 'resi-list' %}" class="btn btn-secondary">Annulla</a>
+</form>
+{% endblock %}

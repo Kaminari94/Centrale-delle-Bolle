@@ -1,0 +1,12 @@
+{% extends 'bolle/homepage.html' %}
+{% load crispy_forms_tags %}
+{% block title %}Modifica Articoli Concessi{% endblock %}
+
+{% block content %}
+<h1>Modifica Articoli Concessi per {{ object.nome }}</h1>
+<form method="post">
+    {% csrf_token %}
+    {{ form|crispy }}
+    <button type="submit" class="btn btn-primary btn-sm mt-3">Salva</button>
+</form>
+{% endblock %}

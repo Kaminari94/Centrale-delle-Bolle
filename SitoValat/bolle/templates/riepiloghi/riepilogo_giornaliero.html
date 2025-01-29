@@ -1,0 +1,76 @@
+{% extends 'bolle/homepage.html' %}
+
+{% block title %}Riepilogo Giornaliero{% endblock %}
+
+{% block content %}
+<head>
+    <style>
+        table td { text-align: end; }
+        table tr:last-child { text-align: end; }
+        @media print {
+            /* Rimuovi elementi non necessari */
+            .d-print-none {
+                display: none !important;
+            }
+
+            /* Ottimizza la tabella */
+            .table {
+                width: 100%;
+            }
+            .container {
+                width: 100%;
+            }
+
+            /* Imposta margini e dimensioni */
+            body {
+                margin: 0;
+                font-size: 12pt;
+            }
+        }
+    </style>
+</head>
+
+<h3><b>Riepilogo giornaliero</b></h3>
+<b>Zona:</b> {{ zona }} <b>Data:</b> {{ data }}
+
+<table class="table table-bordered mt-3 mb-3">
+    <thead>
+        <tr>
+            <th>Nome</th>
+            <th>Reso Prec.</th>
+            <th>Carico Prec.</th>
+            <th>Carico Tot.</th>
+            <th>Venduti NT</th>
+            <th>Venduti CLS</th>
+            <th>Totale Vend.</th>
+            <th>Rimanenza</th>
+            <th>Quantità Venduta</th>
+            <th>Totale Euro</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for codice, articolo in riepilogo.items %}
+        <tr>
+            <td><strong>{{ articolo.nome }}</strong></td>
+            <td>{{ articolo.reso_prec }}</td>
+            <td>{{ articolo.carico_prec }}</td>
+            <td>{{ articolo.carico_tot }}</td>
+            <td>{{ articolo.bolla_nt }}</td>
+            <td>{{ articolo.bolla_cls }}</td>
+            <td>{{ articolo.bolla_totale }}</td>
+            <td>{{ articolo.reso_att }}</td>
+            <td>{{ articolo.quantita_venduta }}</td>
+            <td>€ {{ articolo.tot_euro }}</td>
+        </tr>
+        {% endfor %}
+        <tr>
+            <td colspan="9"><strong>Totale</strong></td>
+            <td><strong>€ {{ totale }}</strong></td>
+        </tr>
+    </tbody>
+</table>
+<a href="{% url 'riepilogo-stampa' %}?data_giorno={{ data_giorno }}&zona={{ zona.id }}"
+   class="btn btn-primary mb-5">
+   Stampa Riepilogo
+</a>
+{% endblock %}
