@@ -1411,6 +1411,9 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
             for i in range(1, 13)
         ]
         # _date è il template per la formattazione date in django, così uso il locale di django direttamente.
+        anno_corr = now().year
+        context['anni'] = [i for i in range(anno_corr-1, anno_corr+2)]
+        # aggiungi gli anni per menu a tendina
         return context
 
     def post(self, request, *args, **kwargs):
@@ -1437,7 +1440,9 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
         elif 'recupera_totali' in request.POST:
             # Recupera i totali per il mese selezionato
             mese = int(request.POST.get('mese'))
-            anno = datetime.now().year  # Puoi anche aggiungere un filtro per selezionare l'anno
+            anno = int(request.POST.get('anno'))
+            if not anno:
+                anno = datetime.now().year  # Puoi anche aggiungere un filtro per selezionare l'anno
             cliente = self.get_object().cliente
 
             # Calcola il range di date per il mese
@@ -1463,13 +1468,16 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
                     riepilogo[articolo.pk]["quantita"] += riga.quantita
 
             # Aggiungi i totali come righe alla fattura
+            articoli = 0
             for riga in riepilogo.values():
                 RigaFattura.objects.create(
                     fattura=self.get_object(),
                     articolo=riga["articolo"],
                     quantita=riga["quantita"],
                 )
-            messages.success(request, f"Totali recuperati per il mese {mese}.")
+                articoli += 1
+            mesetto = _date(data_inizio, "F")
+            messages.success(request, f"Totali recuperati per il mese di {mesetto} {anno}. {articoli} articoli aggiunti.")
             return redirect('fattura-update', pk=self.get_object().pk)
         elif 'confirm' in request.POST:
             # Conferma la modifica e salva la bolla
