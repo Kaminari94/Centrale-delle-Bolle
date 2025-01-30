@@ -172,8 +172,6 @@ class BollaUpdateView(LoginRequiredMixin, UpdateView):
         context["categoria_selezionata"] = categoria_selezionata
         if cliente.proprietario is None:
             # Se il cliente non ha un proprietario, mostra tutti gli articoli
-            if not categoria_selezionata:
-                articoli_concessi = Articolo.objects.none()
             articoli_concessi = Articolo.objects.filter(categoria_id = categoria_selezionata)
 
         else:
@@ -647,13 +645,15 @@ class CaricoUpdateView(LoginRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        categoria_selezionata = self.request.GET.get('categoria')
+        context["categoria_selezionata"] = categoria_selezionata
 
         # Righe associate al carico
         context['righe'] = self.object.righe.all()
 
         # Categorie e articoli disponibili
         context['categorie'] = Categoria.objects.prefetch_related(
-            Prefetch('articoli', queryset=Articolo.objects.all().order_by('nome'))
+            Prefetch('articoli', queryset=Articolo.objects.filter(categoria_id = categoria_selezionata).order_by('nome'))
         ).order_by('ordine')
 
         return context
@@ -784,13 +784,15 @@ class ResoUpdateView(LoginRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        categoria_selezionata = self.request.GET.get('categoria')
+        context["categoria_selezionata"] = categoria_selezionata
 
-        # Righe associate al reso
+        # Righe associate al carico
         context['righe'] = self.object.righe.all()
 
         # Categorie e articoli disponibili
         context['categorie'] = Categoria.objects.prefetch_related(
-            Prefetch('articoli', queryset=Articolo.objects.all().order_by('nome'))
+            Prefetch('articoli', queryset=Articolo.objects.filter(categoria_id = categoria_selezionata).order_by('nome'))
         ).order_by('ordine')
 
         return context
@@ -1395,10 +1397,11 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         cliente = self.object.cliente
-
+        categoria_selezionata = self.request.GET.get('categoria')
+        context["categoria_selezionata"] = categoria_selezionata
         if cliente.proprietario is None:
             # Se il cliente non ha un proprietario, mostra tutti gli articoli
-            articoli_concessi = Articolo.objects.all()
+            articoli_concessi = Articolo.objects.filter(categoria_id = categoria_selezionata)
         else:
             # Ottieni gli articoli concessi al proprietario del cliente
             articoli_concessi = ArticoliConcessi.objects.filter(
@@ -1407,7 +1410,7 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
 
         context['righe'] = self.object.righe.all()
         context['categorie'] = Categoria.objects.prefetch_related(
-            Prefetch('articoli', queryset=Articolo.objects.filter(pk__in=articoli_concessi).order_by('nome'))
+            Prefetch('articoli', queryset=Articolo.objects.filter(pk__in=articoli_concessi, categoria_id = categoria_selezionata).order_by('nome'))
         ).order_by('ordine')
         context['mesi'] = [
             {'numero': i, 'nome': _date(datetime(1900, i, 1), "F")}

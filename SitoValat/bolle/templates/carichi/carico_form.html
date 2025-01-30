@@ -6,16 +6,29 @@
 <h1>Modifica Carico</h1>
 
 <h2>Aggiungi Riga</h2>
+<form method="GET" action="{% url 'carico-update' carico.pk %}">
+    <!-- Selezione della categoria -->
+    <label for="categoria">Categoria:</label>
+    <select class="form-select" name="categoria" id="categoria" onchange="this.form.submit()">
+        <option value="0">Seleziona una categoria...</option>
+        {% for categoria in categorie %}
+            <option value="{{ categoria.id }}" {% if categoria.id|stringformat:"s" == categoria_selezionata %}selected{% endif %}>{{ categoria.nome }}</option>
+        {% endfor %}
+    </select>
+</form>
 <form method="post">
     {% csrf_token %}
     <label for="articolo">Articolo:</label>
     <select name="articolo" class="form-select">
+        <option value="">Selezionare un articolo...</option>
         {% for categoria in categorie %}
-            <optgroup label="{{ categoria.nome }}">
-                {% for articolo in categoria.articoli.all %}
-                    <option value="{{ articolo.id }}">{{ articolo.nome }} - {{articolo.descrizione}}</option>
-                {% endfor %}
-            </optgroup>
+            {% if categoria.articoli.all %}
+                <optgroup label="{{ categoria.nome }}">
+                        {% for articolo in categoria.articoli.all %}
+                            <option value="{{ articolo.id }}">{{ articolo.nome }} - {{articolo.descrizione}}</option>
+                        {% endfor %}
+                </optgroup>
+            {% endif %}
         {% endfor %}
     </select>
     <label for="quantita">Quantità:</label>
@@ -38,6 +51,7 @@
 {% endif %}
 
 <h2>Righe Correnti</h2>
+<div class="table table-responsive">
 <table class="table table-bordered">
     <thead>
         <tr>
@@ -69,6 +83,7 @@
         {% endfor %}
     </tbody>
 </table>
+</div>
 
 <div class="mt-4 mb-5">
     <form method="post">
