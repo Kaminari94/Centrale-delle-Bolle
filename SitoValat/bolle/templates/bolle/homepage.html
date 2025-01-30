@@ -12,7 +12,37 @@
     <style>
         .custom-card {
             background: linear-gradient(135deg, #0099ff, #993399);
+            /* colori nel gradient:
+            #0099ff
+            #398ff9 1 bottone
+            #5285f2
+            #647be9 2 bottone
+            #7270de
+            #7e65d3 3 bottone
+            #8859c6
+            #8f4db8 4 bottone
+            #9541a9
+            #993399 5 bottone*/
             color: white;
+        }
+        .btn-gradient {
+          background: linear-gradient(135deg, #0099ff, #993399);
+          border-style: none;
+        }
+        .ico-home-color1 {
+            color: #398ff9;
+        }
+        .ico-home-color2 {
+            color: #647be9;
+        }
+        .ico-home-color3 {
+            color: #7e65d3;
+        }
+        .ico-home-color4 {
+            color: #8f4db8;
+        }
+        .ico-home-color5 {
+            color: #993399;
         }
         .hover-effect {
             transition: transform 0.3s ease, box-shadow 0.3s ease;
@@ -103,31 +133,31 @@
         <div class="d-none d-lg-flex justify-content-center gap-4 flex-wrap">
             <div class="card text-center p-3 shadow hover-effect" style="width: 180px;">
                 <a href="{% url 'bolle-list' %}" class="text-decoration-none">
-                    <i class="bi bi-receipt-cutoff display-4 text-primary"></i>
+                    <i class="bi bi-receipt-cutoff display-4 ico-home-color1"></i>
                     <p class="mt-2 fw-bold text-dark">Lista Bolle</p>
                 </a>
             </div>
             <div class="card text-center p-3 shadow hover-effect" style="width: 180px;">
                 <a href="{% url 'fatture-list' %}" class="text-decoration-none">
-                    <i class="bi bi-filetype-xml display-4 text-primary"></i>
+                    <i class="bi bi-filetype-xml display-4 ico-home-color2"></i>
                     <p class="mt-2 fw-bold text-dark">Lista Fatture</p>
                 </a>
             </div>
             <div class="card text-center p-3 shadow hover-effect" style="width: 180px;">
                 <a href="{% url 'carichi-list' %}" class="text-decoration-none">
-                    <i class="bi bi-truck display-4 text-success"></i>
+                    <i class="bi bi-truck display-4 ico-home-color3"></i>
                     <p class="mt-2 fw-bold text-dark">Carico</p>
                 </a>
             </div>
             <div class="card text-center p-3 shadow hover-effect" style="width: 180px;">
                 <a href="{% url 'resi-list' %}" class="text-decoration-none">
-                    <i class="bi bi-boxes display-4 text-danger"></i>
+                    <i class="bi bi-boxes display-4 ico-home-color4"></i>
                     <p class="mt-2 fw-bold text-dark">Reso</p>
                 </a>
             </div>
             <div class="card text-center p-3 shadow hover-effect" style="width: 180px;">
                 <a href="{% url 'menu-riepiloghi' %}" class="text-decoration-none">
-                    <i class="bi bi-graph-up-arrow display-4 text-dark"></i>
+                    <i class="bi bi-graph-up-arrow display-4 ico-home-color5"></i>
                     <p class="mt-2 fw-bold text-dark">Riepiloghi</p>
                 </a>
             </div>
