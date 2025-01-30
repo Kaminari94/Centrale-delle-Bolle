@@ -8,7 +8,7 @@
 <h2>Aggiungi Riga</h2>
 <form method="GET" action="{% url 'carico-update' carico.pk %}">
     <!-- Selezione della categoria -->
-    <label for="categoria">Categoria:</label>
+    <label for="categoria" class="form-label">Categoria:</label>
     <select class="form-select" name="categoria" id="categoria" onchange="this.form.submit()">
         <option value="0">Seleziona una categoria...</option>
         {% for categoria in categorie %}
@@ -18,7 +18,7 @@
 </form>
 <form method="post">
     {% csrf_token %}
-    <label for="articolo">Articolo:</label>
+    <label for="articolo" class="form-label mt-2">Articolo:</label>
     <select name="articolo" class="form-select">
         <option value="">Selezionare un articolo...</option>
         {% for categoria in categorie %}
@@ -31,11 +31,11 @@
             {% endif %}
         {% endfor %}
     </select>
-    <label for="quantita">Quantità:</label>
+    <label for="quantita" class="form-label mt-2">Quantità:</label>
     <input type="number" name="quantita" min="1" class="form-control">
 
-    <label for="lotto">Lotto:</label>
-    <input type="text" name="lotto" class="form-control" placeholder="Inserire lotto o lasciare vuoto per generare">
+    <label for="lotto" class="form-label mt-2">Lotto:</label>
+    <input type="text" name="lotto" class="form-control" placeholder="Inserire lotto o lasciare vuoto per generare a {{ data_lotto }}">
 
     <button type="submit" name="add_riga" class="btn btn-success mt-2">Aggiungi</button>
 

@@ -655,7 +655,9 @@ class CaricoUpdateView(LoginRequiredMixin, UpdateView):
         context['categorie'] = Categoria.objects.prefetch_related(
             Prefetch('articoli', queryset=Articolo.objects.filter(categoria_id = categoria_selezionata).order_by('nome'))
         ).order_by('ordine')
-
+        oggi = now() + timedelta(days=6)
+        data_lotto = oggi.strftime('%d%m%y')
+        context["data_lotto"] = data_lotto
         return context
 
     def post(self, request, *args, **kwargs):

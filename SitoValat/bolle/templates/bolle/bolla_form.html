@@ -8,7 +8,7 @@
 <h2>Aggiungi Riga</h2>
 <form method="GET" action="{% url 'bolla-update' bolla.pk %}">
     <!-- Selezione della categoria -->
-    <label for="categoria">Categoria:</label>
+    <label class="mt-2 form-label" for="categoria">Categoria:</label>
     <select class="form-select" name="categoria" id="categoria" onchange="this.form.submit()">
         <option value="0">Seleziona una categoria...</option>
         {% for categoria in categorie %}
@@ -19,7 +19,7 @@
 <form method="post">
     {% csrf_token %}
 
-    <label for="articolo">Articolo:</label>
+    <label class="mt-2 form-label" for="articolo">Articolo:</label>
     <select name="articolo" class="form-select">
         <option value="">Selezionare un articolo...</option>
         {% for categoria in categorie %}
@@ -32,11 +32,12 @@
             {% endif %}
         {% endfor %}
     </select>
-    <label for="quantita">Quantità:</label>
+    <label class="mt-2 form-label" for="quantita">Quantità:</label>
     <input type="number" name="quantita" min="1" class="form-control">
 
-    <label for="lotto">Lotto:</label>
-    <input type="text" name="lotto" class="form-control">
+
+    <label class="form-label" for="lotto">Lotto:</label>
+    <input type="text" name="lotto" class="form-control" placeholder="Automatico se vuoto">
 
     <button type="submit" name="add_riga" class="btn btn-success mt-2">Aggiungi</button>
 

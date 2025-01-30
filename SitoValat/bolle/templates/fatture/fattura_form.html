@@ -8,7 +8,7 @@
 <h2>Aggiungi Riga</h2>
 <form method="GET" action="{% url 'fattura-update' fattura.pk %}">
     <!-- Selezione della categoria -->
-    <label for="categoria">Categoria:</label>
+    <label for="categoria" class="form-label">Categoria:</label>
     <select class="form-select" name="categoria" id="categoria" onchange="this.form.submit()">
         <option value="0">Seleziona una categoria...</option>
         {% for categoria in categorie %}
@@ -18,7 +18,7 @@
 </form>
 <form method="post">
     {% csrf_token %}
-    <label for="articolo">Articolo:</label>
+    <label for="articolo" class="form-label mt-2">Articolo:</label>
     <select name="articolo" class="form-select">
         <option value="">Selezionare un articolo...</option>
         {% for categoria in categorie %}
@@ -31,14 +31,14 @@
             {% endif %}
         {% endfor %}
     </select>
-    <label for="quantita">Quantità:</label>
+    <label for="quantita" class="form-label mt-2">Quantità:</label>
     <input type="number" name="quantita" min="1" class="form-control">
 
-    <label for="prezzo">Prezzo Unitario:</label>
-    <input type="number" step="0.01" name="prezzo" class="form-control">
+    <label for="prezzo" class="form-label mt-2">Prezzo Unitario:</label>
+    <input type="number" step="0.01" name="prezzo" class="form-control" placeholder="Automatico se vuoto">
 
     <button type="submit" name="add_riga" class="btn btn-success mt-2 mb-2 w-100">Aggiungi</button>
-
+    Oppure...
     <h4>Recupera Totali</h4>
     <div class="row g-3 align-items-end mb-4">
         <div class="col-md-6 col-6">
