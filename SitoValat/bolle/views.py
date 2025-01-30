@@ -165,14 +165,17 @@ class BollaUpdateView(LoginRequiredMixin, UpdateView):
     template_name = 'bolle/bolla_form.html'
     success_url = reverse_lazy('bolle-list')  # Dopo la modifica, torna alla lista
 
-
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         cliente = self.object.cliente
-
+        categoria_selezionata = self.request.GET.get('categoria')
+        context["categoria_selezionata"] = categoria_selezionata
         if cliente.proprietario is None:
             # Se il cliente non ha un proprietario, mostra tutti gli articoli
-            articoli_concessi = Articolo.objects.all()
+            if not categoria_selezionata:
+                articoli_concessi = Articolo.objects.none()
+            articoli_concessi = Articolo.objects.filter(categoria_id = categoria_selezionata)
+
         else:
             # Ottieni gli articoli concessi al proprietario del cliente
             articoli_concessi = ArticoliConcessi.objects.filter(

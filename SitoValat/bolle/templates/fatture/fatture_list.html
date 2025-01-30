@@ -116,7 +116,7 @@
             <div class="d-grid gap-2 d-lg-none">
                 <a href="{% url 'fattura-detail' fattura.pk %}" class="btn btn-sm btn-primary"><i class="bi bi-folder2-open"></i> Apri</a>
                 <a href="{% url 'fattura-stampa' fattura.pk %}" class="btn btn-sm btn-success" target="_blank"><i class="bi bi-printer"></i> Stampa</a>
-                <a href="{% url 'fattura-stampa' fattura.pk %}" class="btn btn-sm btn-success" target="_blank"><i class="bi bi-printer"></i> Scarica XML</a>
+                <a href="{% url 'scarica-xml' fattura.pk %}" class="btn btn-sm btn-dark" target="_blank"><i class="bi bi-printer"></i> Scarica XML</a>
                 <a href="{% url 'fattura-update' fattura.pk %}" class="btn btn-sm btn-warning"><i class="bi bi-pencil"></i> Modifica</a>
                 <a href="{% url 'fattura-delete' fattura.pk %}" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i> Elimina</a>
             </div>
