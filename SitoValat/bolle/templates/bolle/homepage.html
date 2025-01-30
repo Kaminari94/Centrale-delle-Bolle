@@ -9,6 +9,20 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <link rel="shortcut icon" type="image/png" href="{% static 'bolle/images/favicon-32x32.png' %}" >
+    <style>
+        .custom-card {
+            background: linear-gradient(135deg, #0099ff, #993399);
+            color: white;
+        }
+        .hover-effect {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .hover-effect:hover {
+            transform: translateY(-5px);
+            box-shadow: 0px 10px 20px rgba(0, 0, 0, 0.2);
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-light bg-light">
@@ -56,49 +70,92 @@
 
     <div class="container mt-4">
         {% block content %}
-        <h1>Benvenuto!</h1>
         {% if user.is_authenticated %}
-        <p>Sei connesso come <strong>{{ user.get_full_name }}</strong>
-            <br>Concessionario: <strong>
-                {% if user.concessionario.nome %}
-                    {{ user.concessionario.nome }}
-                {% else %}
-                    {{ user.zona.concessionario.nome }}
-                {% endif %}
-            </strong>
-            <br>
-            {% if user.zona.nome %}
-                Zona: <strong>{{ user.zona.nome }}</strong>.
-            {% else %}
-                Zona: <strong>Tutte le zone del concessionario {{ user.concessionario.nome }}</strong>
-            {% endif %}
-        </p>
-            <div class="d-grid gap-2 d-lg-none">
-                <a href="{% url 'bolle-list' %}" class="btn btn-lg btn-primary mt-1">Lista Bolle</a>
-                 <a href="{% url 'fatture-list' %}" class="btn btn-lg btn-primary mt-1">Lista Fatture</a>
-                <a href="{% url 'carichi-list' %}" class="btn btn-lg btn-success mt-1">Carico</a>
-                <a href="{% url 'resi-list' %}" class="btn btn-lg btn-danger mt-1">Reso</a>
-                <a href="{% url 'menu-riepiloghi' %}" class="btn btn-lg btn-secondary mt-1">Riepiloghi</a>
+        <div class="card custom-card shadow-lg p-2 mb-4 border-0">
+            <div class="card-body text-center">
+                <i class="bi bi-person-circle display-3"></i>
+                <h3 class="mt-3">Benvenuto, <strong>{{ user.get_full_name }}</strong>!</h3>
+                <p class="card-text mt-2">
+                    <strong>Concessionario:</strong>
+                    {% if user.concessionario.nome %}
+                        {{ user.concessionario.nome }}
+                    {% else %}
+                        {{ user.zona.concessionario.nome }}
+                    {% endif %}
+                    <br>
+                    <strong>Zona:</strong>
+                    {% if user.zona.nome %}
+                        {{ user.zona.nome }}
+                    {% else %}
+                        Tutte le zone
+                    {% endif %}
+                </p>
             </div>
-            <div class="d-none d-lg-block">
-                <a href="{% url 'bolle-list' %}" class="btn btn-lg btn-primary mt-1">Lista Bolle</a>
-                <a href="{% url 'fatture-list' %}" class="btn btn-lg btn-primary mt-1">Lista Fatture</a>
-                <a href="{% url 'carichi-list' %}" class="btn btn-lg btn-success mt-1">Carico</a>
-                <a href="{% url 'resi-list' %}" class="btn btn-lg btn-danger mt-1">Reso</a>
-                <a href="{% url 'menu-riepiloghi' %}" class="btn btn-lg btn-secondary mt-1">Riepiloghi</a>
+        </div>
+
+        <div class="d-grid gap-2 d-lg-none">
+            <a href="{% url 'bolle-list' %}" class="btn btn-lg btn-primary mt-1"><i class="bi bi-receipt-cutoff"></i> Lista Bolle</a>
+             <a href="{% url 'fatture-list' %}" class="btn btn-lg btn-primary mt-1"><i class="bi bi-filetype-xml"></i> Lista Fatture</a>
+            <a href="{% url 'carichi-list' %}" class="btn btn-lg btn-success mt-1"><i class="bi bi-truck"></i> Carico</a>
+            <a href="{% url 'resi-list' %}" class="btn btn-lg btn-danger mt-1"><i class="bi bi-boxes"></i> Reso</a>
+            <a href="{% url 'menu-riepiloghi' %}" class="btn btn-lg btn-dark mt-1"><i class="bi bi-graph-up-arrow"></i> Riepiloghi</a>
+        </div>
+        <div class="d-none d-lg-flex justify-content-center gap-4 flex-wrap">
+            <div class="card text-center p-3 shadow hover-effect" style="width: 180px;">
+                <a href="{% url 'bolle-list' %}" class="text-decoration-none">
+                    <i class="bi bi-receipt-cutoff display-4 text-primary"></i>
+                    <p class="mt-2 fw-bold text-dark">Lista Bolle</p>
+                </a>
             </div>
+            <div class="card text-center p-3 shadow hover-effect" style="width: 180px;">
+                <a href="{% url 'fatture-list' %}" class="text-decoration-none">
+                    <i class="bi bi-filetype-xml display-4 text-primary"></i>
+                    <p class="mt-2 fw-bold text-dark">Lista Fatture</p>
+                </a>
+            </div>
+            <div class="card text-center p-3 shadow hover-effect" style="width: 180px;">
+                <a href="{% url 'carichi-list' %}" class="text-decoration-none">
+                    <i class="bi bi-truck display-4 text-success"></i>
+                    <p class="mt-2 fw-bold text-dark">Carico</p>
+                </a>
+            </div>
+            <div class="card text-center p-3 shadow hover-effect" style="width: 180px;">
+                <a href="{% url 'resi-list' %}" class="text-decoration-none">
+                    <i class="bi bi-boxes display-4 text-danger"></i>
+                    <p class="mt-2 fw-bold text-dark">Reso</p>
+                </a>
+            </div>
+            <div class="card text-center p-3 shadow hover-effect" style="width: 180px;">
+                <a href="{% url 'menu-riepiloghi' %}" class="text-decoration-none">
+                    <i class="bi bi-graph-up-arrow display-4 text-dark"></i>
+                    <p class="mt-2 fw-bold text-dark">Riepiloghi</p>
+                </a>
+            </div>
+        </div>
         {% else %}
-            <p>Accedi per gestire le bolle del tuo concessionario.</p>
-            <div class="d-grid gap-2 d-lg-none">
-                <a href="{% url 'login' %}" class="btn btn-lg btn-primary">Login</a>
-            </div>
-            <div class="d-none d-lg-block">
-                <a href="{% url 'login' %}" class="btn btn-lg btn-primary">Login</a>
+            <div class="container d-flex flex-column flex-lg-row gap-4 justify-content-center align-items-center">
+                 <div class="card shadow-lg p-4 border-0 text-center" style="max-width: 400px;">
+                    <div class="card-body">
+                        <i class="bi bi-truck display-3 text-primary"></i>
+                        <h3 class="mt-3">La Centrale delle Bolle</h3>
+                        <p class="mt-2 text-muted">Gestisci bolle, fatture e report in un'unica piattaforma intuitiva e veloce, pensata per i concessionari della Centrale del Latte di Salerno.</p>
+                    </div>
+                </div>
+                <div class="card shadow-lg p-4 border-0 text-center" style="max-width: 400px;">
+                    <div class="card-body">
+                        <i class="bi bi-box-arrow-in-right display-3 text-primary"></i>
+                        <h3 class="mt-3">Benvenuto!</h3>
+                        <p class="mt-2 text-muted">Accedi per gestire le bolle del tuo concessionario.</p>
+                        <a href="{% url 'login' %}" class="btn btn-lg btn-primary w-100 mt-3">
+                            <i class="bi bi-key"></i> Accedi
+                        </a>
+                    </div>
+                </div>
             </div>
         {% endif %}
         {% endblock %}
     </div>
-    <nav class="fixed-bottom navbar-light bg-light small">
+    <nav class="fixed-bottom navbar-light bg-light small mt-5">
       <div class="container-fluid">
         <small class="text-muted small">La Centrale delle Bolle © {% now "Y" %} Oscar Vasso</small>
       </div>
