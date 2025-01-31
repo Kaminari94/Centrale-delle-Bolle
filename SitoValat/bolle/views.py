@@ -187,6 +187,7 @@ class BollaUpdateView(LoginRequiredMixin, UpdateView):
         return context
 
     def post(self, request, *args, **kwargs):
+        categoria_selezionata = request.POST.get('categoria')  # Nascosto nel form, serve per mantenere la cat. selezionata
         if 'add_riga' in request.POST:
             #aggiungi riga alla bolla
             articolo_id = request.POST.get('articolo')
@@ -195,10 +196,12 @@ class BollaUpdateView(LoginRequiredMixin, UpdateView):
             # Verifica se la quantità è valida
             if not quantita or not quantita.isdigit() or int(quantita) <= 0:
                 messages.error(request, "Inserisci una quantità valida maggiore di 0.")
-                return redirect('bolla-update', pk=self.get_object().pk)
+                return redirect(
+                    f"{reverse('bolla-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
             if not articolo_id or articolo_id == "":
                 messages.error(request, "Inserire un articolo.")
-                return redirect('bolla-update', pk=self.get_object().pk)
+                return redirect(
+                    f"{reverse('bolla-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
             # Recupera l'ultimo lotto dal carico, se esiste
             articolo = Articolo.objects.get(pk=articolo_id)
             ultimo_carico = RigaCarico.objects.filter(articolo=articolo).order_by('-carico__data').first()
@@ -214,7 +217,7 @@ class BollaUpdateView(LoginRequiredMixin, UpdateView):
                 quantita = quantita,
                 lotto = lotto
             )
-            return redirect('bolla-update', pk=self.get_object().pk)
+            return redirect(f"{reverse('bolla-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
         elif 'confirm' in request.POST:
             # Conferma la modifica e salva la bolla
             return redirect('bolle-list')
@@ -661,6 +664,7 @@ class CaricoUpdateView(LoginRequiredMixin, UpdateView):
         return context
 
     def post(self, request, *args, **kwargs):
+        categoria_selezionata = request.POST.get('categoria')  # Per mantenere cat. selezionata
         if 'add_riga' in request.POST:
             # Aggiungi una nuova riga al carico
             articolo_id = request.POST.get('articolo')
@@ -670,13 +674,13 @@ class CaricoUpdateView(LoginRequiredMixin, UpdateView):
             # Verifica la quantità
             if not quantita or not quantita.isdigit() or int(quantita) <= 0:
                 messages.error(request, "Inserisci una quantità valida maggiore di 0.")
-                return redirect('carico-update', pk=self.get_object().pk)
-
+                return redirect(
+                    f"{reverse('carico-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
             # Verifica l'articolo
             if not articolo_id:
                 messages.error(request, "Inserire un articolo.")
-                return redirect('carico-update', pk=self.get_object().pk)
-
+                return redirect(
+                    f"{reverse('carico-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
             # Recupera o genera il lotto
             articolo = Articolo.objects.get(pk=articolo_id)
             if not lotto:
@@ -690,8 +694,7 @@ class CaricoUpdateView(LoginRequiredMixin, UpdateView):
                 quantita=int(quantita),
                 lotto=lotto
             )
-            return redirect('carico-update', pk=self.get_object().pk)
-
+            return redirect(f"{reverse('carico-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
         elif 'confirm' in request.POST:
             # Conferma la modifica e salva il carico
             return redirect('carichi-list')
@@ -800,6 +803,7 @@ class ResoUpdateView(LoginRequiredMixin, UpdateView):
         return context
 
     def post(self, request, *args, **kwargs):
+        categoria_selezionata = request.POST.get("categoria") # Mantenere categoria selezionata
         if 'add_riga' in request.POST:
             articolo_id = request.POST.get('articolo')
             quantita = request.POST.get('quantita')
@@ -807,12 +811,14 @@ class ResoUpdateView(LoginRequiredMixin, UpdateView):
             # Verifica se la quantità è valida
             if not quantita or not quantita.isdigit() or int(quantita) <= 0:
                 messages.error(request, "Inserisci una quantità valida maggiore di 0.")
-                return redirect('reso-update', pk=self.get_object().pk)
+                return redirect(
+                    f"{reverse('reso-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
 
             # Verifica l'articolo
             if not articolo_id:
                 messages.error(request, "Inserire un articolo.")
-                return redirect('reso-update', pk=self.get_object().pk)
+                return redirect(
+                    f"{reverse('reso-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
 
             # Crea la nuova riga di reso
             RigaReso.objects.create(
@@ -820,7 +826,7 @@ class ResoUpdateView(LoginRequiredMixin, UpdateView):
                 articolo_id=articolo_id,
                 quantita=int(quantita),
             )
-            return redirect('reso-update', pk=self.get_object().pk)
+            return redirect(f"{reverse('reso-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
 
         elif 'confirm' in request.POST:
             return redirect('resi-list')
@@ -1425,6 +1431,7 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
         return context
 
     def post(self, request, *args, **kwargs):
+        categoria_selezionata = request.POST.get('categoria') # Per mantenere categoria sel.
         if 'add_riga' in request.POST:
             #aggiungi riga alla bolla
             articolo_id = request.POST.get('articolo')
@@ -1433,18 +1440,19 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
             # Verifica se la quantità è valida
             if not quantita or not quantita.isdigit() or int(quantita) <= 0:
                 messages.error(request, "Inserisci una quantità valida maggiore di 0.")
-                return redirect('fattura-update', pk=self.get_object().pk)
+                return redirect(
+                    f"{reverse('fattura-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
             if not articolo_id or articolo_id == "":
                 messages.error(request, "Inserire un articolo.")
-                return redirect('fattura-update', pk=self.get_object().pk)
-
+                return redirect(
+                    f"{reverse('fattura-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
             RigaFattura.objects.create(
                 fattura = self.get_object(),
                 articolo_id = articolo_id,
                 prezzo = prezzo,
                 quantita = quantita,
             )
-            return redirect('fattura-update', pk=self.get_object().pk)
+            return redirect(f"{reverse('fattura-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
         elif 'recupera_totali' in request.POST:
             # Recupera i totali per il mese selezionato
             mese = int(request.POST.get('mese'))

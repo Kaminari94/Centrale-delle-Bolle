@@ -18,7 +18,7 @@
 </form>
 <form method="post">
     {% csrf_token %}
-
+    <input type="hidden" name="categoria" value="{{ categoria_selezionata }}"> <!-- per mantenere categoria selezionata -->
     <label class="mt-2 form-label" for="articolo">Articolo:</label>
     <select name="articolo" class="form-select">
         <option value="">Selezionare un articolo...</option>
