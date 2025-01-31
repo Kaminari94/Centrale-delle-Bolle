@@ -30,19 +30,19 @@
           border-style: none;
         }
         .ico-home-color1 {
-            color: #398ff9;
+            color: #398ff9 !important;
         }
         .ico-home-color2 {
-            color: #647be9;
+            color: #647be9 !important;
         }
         .ico-home-color3 {
-            color: #7e65d3;
+            color: #7e65d3 !important;
         }
         .ico-home-color4 {
-            color: #8f4db8;
+            color: #8f4db8 !important;
         }
         .ico-home-color5 {
-            color: #993399;
+            color: #993399 !important;
         }
         .hover-effect {
             transition: transform 0.3s ease, box-shadow 0.3s ease;
@@ -51,6 +51,21 @@
         .hover-effect:hover {
             transform: translateY(-5px);
             box-shadow: 0px 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        .home-card {
+            aspect-ratio: 1/1; /* Mantiene le card quadrate */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            border-radius: 12px;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .home-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0px 8px 16px rgba(0, 0, 0, 0.15);
         }
     </style>
 </head>
@@ -123,13 +138,41 @@
             </div>
         </div>
 
-        <div class="d-grid gap-2 d-lg-none">
-            <a href="{% url 'bolle-list' %}" class="btn btn-lg btn-primary mt-1"><i class="bi bi-receipt-cutoff"></i> Lista Bolle</a>
-             <a href="{% url 'fatture-list' %}" class="btn btn-lg btn-primary mt-1"><i class="bi bi-filetype-xml"></i> Lista Fatture</a>
-            <a href="{% url 'carichi-list' %}" class="btn btn-lg btn-success mt-1"><i class="bi bi-truck"></i> Carico</a>
-            <a href="{% url 'resi-list' %}" class="btn btn-lg btn-danger mt-1"><i class="bi bi-boxes"></i> Reso</a>
-            <a href="{% url 'menu-riepiloghi' %}" class="btn btn-lg btn-dark mt-1"><i class="bi bi-graph-up-arrow"></i> Riepiloghi</a>
+        <div class="container d-lg-none">
+            <div class="row g-3">
+                <div class="col-6">
+                    <a href="{% url 'bolle-list' %}" class="card shadow-sm home-card">
+                        <i class="bi bi-receipt-cutoff display-4 ico-home-color1"></i>
+                        <p class="fw-bold text-dark mt-2">Bolle</p>
+                    </a>
+                </div>
+                <div class="col-6">
+                    <a href="{% url 'fatture-list' %}" class="card shadow-sm home-card">
+                        <i class="bi bi-filetype-xml display-4 ico-home-color2"></i>
+                        <p class="fw-bold text-dark mt-2">Fatture</p>
+                    </a>
+                </div>
+                <div class="col-6">
+                    <a href="{% url 'carichi-list' %}" class="card shadow-sm home-card">
+                        <i class="bi bi-truck display-4 ico-home-color3"></i>
+                        <p class="fw-bold text-dark mt-2">Carico</p>
+                    </a>
+                </div>
+                <div class="col-6">
+                    <a href="{% url 'resi-list' %}" class="card shadow-sm home-card">
+                        <i class="bi bi-boxes display-4 ico-home-color4"></i>
+                        <p class="fw-bold text-dark mt-2">Reso</p>
+                    </a>
+                </div>
+                <div class="col-6 offset-3">
+                    <a href="{% url 'menu-riepiloghi' %}" class="card shadow-sm home-card mb-5">
+                        <i class="bi bi-graph-up-arrow display-4 ico-home-color5"></i>
+                        <p class="fw-bold text-dark mt-2">Riepiloghi</p>
+                    </a>
+                </div>
+            </div>
         </div>
+
         <div class="d-none d-lg-flex justify-content-center gap-4 flex-wrap">
             <div class="card text-center p-3 shadow hover-effect" style="width: 180px;">
                 <a href="{% url 'bolle-list' %}" class="text-decoration-none">
