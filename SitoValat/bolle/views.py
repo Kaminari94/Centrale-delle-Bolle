@@ -247,7 +247,10 @@ class BollaCreateView(LoginRequiredMixin, CreateView):
 
         form.fields['cliente'].label = "Tipo Bolla e Cliente:"
         form.fields['note'].label = "Eventuali Note:"
-        form.fields['note'].widget.attrs.update({'placeholder': 'Inserisci eventuali note. Per far si che questa bolla venga contata nel conto del giorno dopo quello attuale inserire "conto domani".'})
+        form.fields['note'].widget.attrs.update({
+            'maxlength':'255',
+            'placeholder': 'Inserisci eventuali note. Per far si che questa bolla venga contata nel conto del giorno dopo quello attuale inserire "conto domani".'
+        })
 
         return form
 
