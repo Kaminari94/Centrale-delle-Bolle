@@ -205,12 +205,13 @@ class BollaUpdateView(LoginRequiredMixin, UpdateView):
             # Recupera l'ultimo lotto dal carico, se esiste
             articolo = Articolo.objects.get(pk=articolo_id)
             ultimo_carico = RigaCarico.objects.filter(articolo=articolo).order_by('-carico__data').first()
-            if ultimo_carico:
-                lotto = ultimo_carico.lotto
-            else:
-                # Genera un lotto predefinito se non trovato
-                oggi = now() + timedelta(days=5)
-                lotto = oggi.strftime('%d%m%y')
+            if not lotto: # se il lotto non è fornito dall'utente, viene generato automaticamente
+                if ultimo_carico:
+                    lotto = ultimo_carico.lotto
+                else:
+                    # Genera un lotto predefinito se non trovato
+                        oggi = now() + timedelta(days=5)
+                        lotto = oggi.strftime('%d%m%y')
             RigaBolla.objects.create(
                 bolla = self.get_object(),
                 articolo_id = articolo_id,
@@ -246,7 +247,7 @@ class BollaCreateView(LoginRequiredMixin, CreateView):
 
         form.fields['cliente'].label = "Tipo Bolla e Cliente:"
         form.fields['note'].label = "Eventuali Note:"
-        form.fields['note'].widget.attrs.update({'placeholder': 'Inserisci eventuali note'})
+        form.fields['note'].widget.attrs.update({'placeholder': 'Inserisci eventuali note. Per far si che questa bolla venga contata nel conto del giorno dopo quello attuale inserire "conto domani".'})
 
         return form
 
@@ -912,8 +913,16 @@ def riepilogo_giornaliero(request):
         if not reso_giorno_precedente:
             reso_giorno_precedente = Reso.objects.filter(data=(giorno_precedente - timedelta(days=2)), zona=zona)
     # Rozzo? Si. Ma efficace. Statt zitt.
+    prec_inizio = datetime.combine(giorno_precedente, datetime.min.time()) #devo farlo sempre perchè è una datetime, per il range.
+    prec_inizio = timezone.make_aware(prec_inizio, timezone.get_current_timezone())
+    prec_fine = datetime.combine(giorno_precedente, datetime.max.time())
+    prec_fine = timezone.make_aware(prec_fine, timezone.get_current_timezone())
+    bolle_del_giorno = Bolla.objects.filter(
+        Q(data__range=(data_inizio, data_fine)) |
+        Q(data__range=(prec_inizio, prec_fine), note__icontains="conto domani"),
+        tipo_documento__concessionario=zona.concessionario
+    ).exclude(tipo_documento__nome="RF")
 
-    bolle_del_giorno = Bolla.objects.filter(data__range=(data_inizio, data_fine), tipo_documento__concessionario=zona.concessionario).exclude(tipo_documento__nome="RF")
     reso_del_giorno = Reso.objects.filter(data=data, zona=zona)
 
     articoli = Articolo.objects.all()
@@ -932,6 +941,7 @@ def riepilogo_giornaliero(request):
         carico_totale = carico_prec + reso_prec
         reso_att = (RigaReso.objects.filter(reso__in=reso_del_giorno, articolo=articolo).aggregate(Sum("quantita")))['quantita__sum'] or 0
         bolla_totale = RigaBolla.objects.filter(bolla__in=bolle_del_giorno, articolo=articolo).aggregate(Sum("quantita"))['quantita__sum'] or 0
+
         bolla_nt = RigaBolla.objects.filter(bolla__in=bolle_del_giorno, articolo=articolo, bolla__tipo_documento__nome="NT").aggregate(Sum("quantita"))[
             'quantita__sum'] or 0
         bolla_cls = RigaBolla.objects.filter(bolla__in=bolle_del_giorno, articolo=articolo, bolla__tipo_documento__nome="CLS").aggregate(Sum("quantita"))[
