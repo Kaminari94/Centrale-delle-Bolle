@@ -6,6 +6,7 @@
 <h1>Modifica Bolla</h1>
 
 <h2>Aggiungi Riga</h2>
+{% if not bolla.cliente.proprietario %}
 <form method="GET" action="{% url 'bolla-update' bolla.pk %}">
     <!-- Selezione della categoria -->
     <label class="mt-2 form-label" for="categoria">Categoria:</label>
@@ -16,6 +17,7 @@
         {% endfor %}
     </select>
 </form>
+{% endif %}
 <form method="post">
     {% csrf_token %}
     <input type="hidden" name="categoria" value="{{ categoria_selezionata }}"> <!-- per mantenere categoria selezionata -->
