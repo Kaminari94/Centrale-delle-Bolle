@@ -212,6 +212,9 @@ class BollaUpdateView(LoginRequiredMixin, UpdateView):
                     # Genera un lotto predefinito se non trovato
                         oggi = now() + timedelta(days=5)
                         lotto = oggi.strftime('%d%m%y')
+            if articolo.categoria.nome == "Imballaggio":
+                lotto = "---"
+
             RigaBolla.objects.create(
                 bolla = self.get_object(),
                 articolo_id = articolo_id,
