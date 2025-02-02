@@ -138,6 +138,7 @@ def genera_fattura_xml(fattura):
         xml.addQuickElement("CondizioniPagamento", fattura.condizioni_pagamento)
         xml.startElement("DettaglioPagamento", {})
         xml.addQuickElement("ModalitaPagamento", fattura.modalita_pagamento)
+        xml.addQuickElement("DataRiferimentoTerminiPagamento", fattura.data.strftime('%Y-%m-%d'))
         xml.addQuickElement("DataScadenzaPagamento", fattura.scadenza_pagamento.strftime('%Y-%m-%d'))
         xml.addQuickElement("ImportoPagamento", format(fattura.totali["tot"], ".2f"))
         xml.addQuickElement("IstitutoFinanziario", fattura.concessionario.istituto_finanziario)
@@ -149,6 +150,7 @@ def genera_fattura_xml(fattura):
         xml.addQuickElement("CondizioniPagamento", fattura.condizioni_pagamento)
         xml.startElement("DettaglioPagamento", {})
         xml.addQuickElement("ModalitaPagamento", fattura.modalita_pagamento)
+        xml.addQuickElement("DataRiferimentoTerminiPagamento", fattura.data.strftime('%Y-%m-%d'))
         xml.addQuickElement("DataScadenzaPagamento", fattura.scadenza_pagamento.strftime('%Y-%m-%d'))
         xml.addQuickElement("ImportoPagamento", format(fattura.totali["tot"], ".2f"))
         xml.addQuickElement("IstitutoFinanziario", fattura.concessionario.istituto_finanziario)
@@ -157,9 +159,9 @@ def genera_fattura_xml(fattura):
     base64 = genera_pdf_base64(fattura)
     if fattura.pdf_file:
         xml.startElement("Allegati", {})
-        xml.addQuickElement("NomeAttachment", "Fattura" + str(fattura.cliente.nome) + "N" + str(fattura.numero)+ ".pdf")
+        xml.addQuickElement("NomeAttachment", "FatturaN" + str(fattura.numero)+ ".pdf")
         xml.addQuickElement("FormatoAttachment", "PDF")
-        xml.addQuickElement("DescrizioneAttachment", "Fattura del " + str(fattura.data) + "N. " + str(fattura.numero) + ", emessa da " + str(fattura.concessionario.nome) + " al cliente " + str(fattura.cliente.nome))
+        xml.addQuickElement("DescrizioneAttachment", "Fattura del " + str(fattura.data) + " N. " + str(fattura.numero) + ", emessa da " + str(fattura.concessionario.nome) + " al cliente " + str(fattura.cliente.nome))
         xml.addQuickElement("Attachment", fattura.pdf_file)
         xml.endElement("Allegati")
 
