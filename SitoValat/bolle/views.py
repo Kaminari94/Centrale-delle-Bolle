@@ -1232,6 +1232,8 @@ def riepilogo_cls(request):
     # Converti le date
     data_inizio = datetime.strptime(data_inizio, "%Y-%m-%d")
     data_fine = datetime.strptime(data_fine, "%Y-%m-%d")
+    data_inizio = datetime.combine(data_inizio, datetime.min.time())
+    data_fine = datetime.combine(data_fine, datetime.max.time())
     data_inizio = timezone.make_aware(data_inizio, timezone.get_current_timezone())
     data_fine = timezone.make_aware(data_fine, timezone.get_current_timezone())
     if hasattr(user, 'zona'):
@@ -1453,7 +1455,15 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
             articolo_id = request.POST.get('articolo')
             quantita = request.POST.get('quantita')
             prezzo = request.POST.get('prezzo')
+            cliente = self.get_object().cliente
+            user = self.request.user
             # Verifica se la quantità è valida
+            if hasattr(user, 'zona'):
+                zona = user.zona
+                concessionario = zona.concessionario
+            else:
+                concessionario = user.concessionario
+            #Check Quantità e id articolo
             if not quantita or not quantita.isdigit() or int(quantita) <= 0:
                 messages.error(request, "Inserisci una quantità valida maggiore di 0.")
                 return redirect(
@@ -1462,6 +1472,10 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
                 messages.error(request, "Inserire un articolo.")
                 return redirect(
                     f"{reverse('fattura-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
+            tipo_rf = TipoDocumento.objects.filter(nome="RF", concessionario=concessionario).first()
+            if cliente.tipo_documento_predefinito == tipo_rf:
+                articolo = get_object_or_404(Articolo, pk=articolo_id)
+                prezzo = articolo.prezzo_tr
             RigaFattura.objects.create(
                 fattura = self.get_object(),
                 articolo_id = articolo_id,
@@ -1471,6 +1485,7 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
             return redirect(f"{reverse('fattura-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
         elif 'recupera_totali' in request.POST:
             # Recupera i totali per il mese selezionato
+            user = self.request.user
             mese = int(request.POST.get('mese'))
             anno = int(request.POST.get('anno'))
             if not anno:
@@ -1484,12 +1499,26 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
             data_fine = (data_inizio + relativedelta(months=1)) - timedelta(days=1)
             data_fine = datetime.combine(data_fine, datetime.max.time())
             data_fine = timezone.make_aware(data_fine, timezone.get_current_timezone())
-
-            # Recupera le bolle del cliente per il mese selezionato
-            bolle_cliente = Bolla.objects.filter(
-                cliente=cliente,
-                data__range=(data_inizio, data_fine)
-            )
+            if hasattr(user, 'zona'):
+                zona = user.zona
+                concessionario = zona.concessionario
+            else:
+                concessionario = user.concessionario
+            tipo_rf = TipoDocumento.objects.filter(nome="RF", concessionario = concessionario).first()
+            tipo_cls = TipoDocumento.objects.filter(nome="CLS", concessionario = concessionario).first()
+            if cliente.tipo_documento_predefinito == tipo_rf:
+                # DEBUG print("hello")
+                # Recupera le bolle dei clienti CLS
+                bolle_cliente = Bolla.objects.filter(
+                    tipo_documento = tipo_cls,
+                    data__range=(data_inizio, data_fine)
+                )
+            else:
+                # Recupera le bolle del cliente per il mese selezionato
+                bolle_cliente = Bolla.objects.filter(
+                    cliente=cliente,
+                    data__range=(data_inizio, data_fine)
+                )
 
             # Calcola i totali per ogni articolo
             riepilogo = defaultdict(lambda: {"quantita": 0, "articolo": None})
@@ -1501,11 +1530,18 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
 
             # Aggiungi i totali come righe alla fattura
             articoli = 0
+
             for riga in riepilogo.values():
+                articolo = riga["articolo"]
+                if cliente.tipo_documento_predefinito == tipo_rf:
+                    prezzo = articolo.prezzo_tr
+                else:
+                    prezzo = articolo.prezzo
                 RigaFattura.objects.create(
                     fattura=self.get_object(),
                     articolo=riga["articolo"],
                     quantita=riga["quantita"],
+                    prezzo=prezzo,
                 )
                 articoli += 1
             mesetto = _date(data_inizio, "F")
