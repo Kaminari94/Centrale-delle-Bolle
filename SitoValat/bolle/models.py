@@ -140,7 +140,7 @@ class Bolla(models.Model):
     note = models.TextField(blank=True, null=True)  # Eventuali note aggiuntive
 
     def save(self, *args, **kwargs):
-        skip_auto_number = kwargs.pop('skip_auto_number', False)  # Recuperiamo il flag, DA PROVARE
+        skip_auto_number = kwargs.pop('skip_auto_number', True)  # Recuperiamo il flag, DA PROVARE
         if not self.id and not skip_auto_number:  # Controlla se la bolla è nuova
             with transaction.atomic():  # Blocca la transazione per garantire unicità
                 tipo_doc = self.tipo_documento
