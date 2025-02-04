@@ -370,16 +370,24 @@ class ConfirmImportView(View):
 
             try:
                 with transaction.atomic():
-                    bolla_obj, created = Bolla.objects.get_or_create(
+                    bolla_obj = Bolla.objects.filter(
                         cliente=cliente,
                         tipo_documento=tipo_doc,
                         data=data,
                         numero=current_bolla_number,
                         defaults={"note": f"Importato il {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"},
-                    )
-                    if created:
+                    ).first()
+
+                    if not bolla_obj:
+                        bolla_obj = Bolla(
+                            cliente=cliente,
+                            tipo_documento=tipo_doc,
+                            data=data,
+                            numero=current_bolla_number,
+                            defaults={"note": f"Importato il {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"},
+                        )
                         bolla_obj.save(skip_auto_number=True)
-                        # Da provare
+                        # DA PROVARE nuovo import. Dovrebbe funzionare ora.
 
                     #print(f"Data parsata: {data}, Numero Bolla: {numero_bolla}")
                     for articolo in parsed_data["articoli"]:
