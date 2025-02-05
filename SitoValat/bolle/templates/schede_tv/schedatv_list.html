@@ -57,7 +57,7 @@
         </tr>
     </thead>
     <tbody>
-        {% for scheda_tv in schede %}
+        {% for scheda_tv in schede_tv %}
             <tr>
                 <!--<td>{{ forloop.counter }}</td>-->
                 <td>{{ scheda_tv.cliente.zona.nome|default:"-" }}</td>
@@ -83,7 +83,7 @@
 
 <!-- Card delle schede per smartphone -->
 <div class="d-grid gap-2 d-lg-none">
-    {% for scheda_tv in schede %}
+    {% for scheda_tv in schede_tv %}
 <div class="card">
   <div class="card-header">
     <span style="float: left;">{{ scheda_tv.cliente.zona.nome|default:"-" }} | {{ scheda_tv.numero }}</span> <span style="float: right;">{{ scheda_tv.data|date:"F Y" }}</span>

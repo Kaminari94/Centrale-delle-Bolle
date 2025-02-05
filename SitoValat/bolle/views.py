@@ -1635,13 +1635,14 @@ class SchedaTVListView(LoginRequiredMixin, ListView):
         data_inizio_str = self.request.GET.get('data_inizio')
         data_fine_str = self.request.GET.get('data_fine')
         if hasattr(user, 'zona'):
-            tipo_documento_id = TipoDocumento.objects.filter(concessionario=user.zona.concessionario, nome="NTV").first()
+            tipo_documento_id = TipoDocumento.objects.filter(concessionario=user.zona.concessionario, nome="NTV").first().pk
         elif hasattr(user, 'concessionario'):
-            tipo_documento_id = TipoDocumento.objects.filter(concessionario=user.concessionario, nome="NTV").first()
+            tipo_documento_id = TipoDocumento.objects.filter(concessionario=user.concessionario, nome="NTV").first().pk
+            print(tipo_documento_id)
         else:
             tipo_documento_id = TipoDocumento.objects.none()
 
-        tipo_documento_id = tipo_documento_id.pk()
+        #tipo_documento_id = tipo_documento_id.pk()
         # Gestione delle date
         oggi = make_aware(datetime.now())
         data_inizio = self.get_data_filtrata(data_inizio_str, oggi, inizio=True)
@@ -1679,10 +1680,10 @@ class SchedaTVListView(LoginRequiredMixin, ListView):
             tipo = TipoDocumento.objects.filter(nome="NTV", concessionario=user.zona.concessionario)
         elif hasattr(user, 'concessionario'):
             conc = user.concessionario
-            tipo = TipoDocumento.objects.filter(concessionario=user.concessionario)
+            tipo = TipoDocumento.objects.filter(nome="NTV", concessionario=user.concessionario)
         else:
             tipo = TipoDocumento.objects.none()
-        schede = SchedaTV.objects.filter(tipo_documento__concessionario = conc, tipo_documento__in= tipo, data__range=(data_inizio, data_fine))
+        schede = SchedaTV.objects.filter(data__range=(data_inizio, data_fine))
         context['schede_tv'] = schede
         return context
 
