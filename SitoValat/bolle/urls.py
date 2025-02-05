@@ -44,4 +44,10 @@ urlpatterns = [
     path('fatture/<int:pk>/rigadelete/', RigaFatturaDeleteView.as_view(), name='riga-fattura-delete'),
     path('fatture/<int:pk>/stampa/', FatturaStampaView, name='fattura-stampa'),
     path('fatture/<int:pk>/scarica-xml/', scarica_xml, name='scarica-xml'),
+    path('schedetv/', SchedaTVListView.as_view(), name='schedatv-list'),
+    path('schedetv/<int:pk>/', SchedaTVDetailView.as_view(), name='schedatv-detail'),
+    path('schedetv/create/', SchedaTVCreateView.as_view(), name='schedatv-create'),
+    path('schedetv/<int:pk>/update/', SchedaTVUpdateView.as_view(), name='schedatv-update'),
+    path('schedetv/<int:pk>/delete/', SchedaTVDeleteView.as_view(), name='schedatv-delete'),
+    path('schedetv/<int:pk>/rigadelete/', RigaSchedaTVDeleteView.as_view(), name='rigaschedaTV-delete'),
 ]

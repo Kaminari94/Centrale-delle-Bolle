@@ -5,6 +5,7 @@ from datetime import datetime
 from django.core.exceptions import ValidationError
 from decimal import Decimal
 from django.utils.timezone import make_aware
+from django.utils import timezone
 
 
 
@@ -336,3 +337,21 @@ class RigaFattura(models.Model):
 
     def __str__(self):
         return f"Fattura Num: {self.fattura.tipo_fattura} {self.fattura.numero} | {self.articolo.nome} | Quantità: {self.quantita}"
+
+class SchedaTV(models.Model):
+    cliente = models.ForeignKey('Cliente', on_delete=models.CASCADE, related_name='schede_tv')
+    tipo_documento = models.ForeignKey('TipoDocumento', on_delete=models.CASCADE)
+    data = models.DateField(default=timezone.now)  # Usa DateField invece di mese/anno separati
+    numero = models.PositiveIntegerField()
+
+    def __str__(self):
+        return f"{self.cliente} - {self.data.strftime('%m/%Y')}"
+
+class RigaSchedaTV(models.Model):
+    scheda = models.ForeignKey('SchedaTV', on_delete=models.CASCADE, related_name='righe')
+    giorno = models.PositiveSmallIntegerField(choices=[(i, str(i)) for i in range(1, 32)]) # Una scelta di numeri da 1 a 31 per il giorno del mese.
+    articolo = models.ForeignKey('Articolo', on_delete=models.CASCADE)
+    quantita = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return f"{self.scheda} - Giorno {self.giorno}: {self.quantita}x {self.articolo.nome}"

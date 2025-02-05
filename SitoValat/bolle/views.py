@@ -1623,3 +1623,141 @@ def FatturaStampaView(request, pk):
     nome = fattura.cliente.nome.replace(" ", "")
     response['Content-Disposition'] = f'attachment; filename="Fattura-{nome}-N-{fattura.numero}.pdf'
     return response
+
+
+from django.shortcuts import redirect
+from django.contrib import messages
+from django.urls import reverse_lazy, reverse
+from django.utils.timezone import now
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import Prefetch
+from .models import SchedaTV, RigaSchedaTV, Zona, Categoria, Articolo
+
+
+# LISTA SCHEDE TV
+class SchedaTVListView(LoginRequiredMixin, ListView):
+    model = SchedaTV
+    template_name = 'schede_tv/schedatv_list.html'
+    context_object_name = 'schede_tv'
+    ordering = ['-data']
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = super().get_queryset()
+        data_inizio = self.request.GET.get('data_inizio')
+        data_fine = self.request.GET.get('data_fine')
+
+        if hasattr(user, 'zona'):
+            zonaconc = Zona.objects.filter(pk=user.zona.pk)
+        elif hasattr(user, 'concessionario'):
+            zonaconc = Zona.objects.filter(concessionario=user.concessionario)
+        else:
+            zonaconc = Zona.objects.none()
+
+        queryset = queryset.filter(zona__in=zonaconc)
+        if data_inizio and data_fine:
+            queryset = queryset.filter(data__range=[data_inizio, data_fine])
+
+        return queryset
+
+
+# DETTAGLIO SCHEDA TV
+class SchedaTVDetailView(LoginRequiredMixin, DetailView):
+    model = SchedaTV
+    template_name = 'schede_tv/schedatv_detail.html'
+    context_object_name = 'scheda_tv'
+
+
+# CREAZIONE SCHEDA TV
+class SchedaTVCreateView(LoginRequiredMixin, CreateView):
+    model = SchedaTV
+    template_name = "schede_tv/schedatv_create.html"
+    fields = ['data', 'zona', 'cliente', 'numero', 'note']
+
+    def get_form(self, *args, **kwargs):
+        form = super().get_form(*args, **kwargs)
+        user = self.request.user
+
+        if hasattr(user, 'zona'):
+            form.fields['zona'].queryset = Zona.objects.filter(pk=user.zona.pk)
+        elif hasattr(user, 'concessionario'):
+            form.fields['zona'].queryset = Zona.objects.filter(concessionario=user.concessionario)
+        else:
+            form.fields['zona'].queryset = Zona.objects.none()
+            messages.error(self.request, "Non hai i permessi per creare una scheda TV.")
+            self.success_url = reverse_lazy('home')
+
+        return form
+
+    def get_success_url(self):
+        return reverse_lazy('schedatv-update', kwargs={'pk': self.object.pk})
+
+
+# MODIFICA SCHEDA TV
+class SchedaTVUpdateView(LoginRequiredMixin, UpdateView):
+    model = SchedaTV
+    fields = ['data', 'zona', 'cliente', 'numero', 'note']
+    template_name = 'schede_tv/schedatv_form.html'
+    success_url = reverse_lazy('schedatv-list')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        categoria_selezionata = self.request.GET.get('categoria')
+        context["categoria_selezionata"] = categoria_selezionata
+
+        # Righe associate alla scheda TV
+        context['righe'] = self.object.righe.all()
+
+        # Categorie e articoli disponibili
+        context['categorie'] = Categoria.objects.prefetch_related(
+            Prefetch('articoli', queryset=Articolo.objects.filter(categoria_id=categoria_selezionata).order_by('nome'))
+        ).order_by('ordine')
+
+        return context
+
+    def post(self, request, *args, **kwargs):
+        categoria_selezionata = request.POST.get('categoria')
+        if 'add_riga' in request.POST:
+            articolo_id = request.POST.get('articolo')
+            quantita = request.POST.get('quantita')
+
+            if not quantita or not quantita.isdigit() or int(quantita) <= 0:
+                messages.error(request, "Inserisci una quantità valida maggiore di 0.")
+                return redirect(
+                    f"{reverse('schedatv-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
+
+            if not articolo_id:
+                messages.error(request, "Inserire un articolo.")
+                return redirect(
+                    f"{reverse('schedatv-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
+
+            articolo = Articolo.objects.get(pk=articolo_id)
+
+            RigaSchedaTV.objects.create(
+                scheda_tv=self.get_object(),
+                articolo=articolo,
+                quantita=int(quantita)
+            )
+            return redirect(
+                f"{reverse('schedatv-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
+
+        elif 'confirm' in request.POST:
+            return redirect('schedatv-list')
+
+        return super().post(request, *args, **kwargs)
+
+
+# ELIMINAZIONE SCHEDA TV
+class SchedaTVDeleteView(LoginRequiredMixin, DeleteView):
+    model = SchedaTV
+    success_url = reverse_lazy('schedatv-list')
+    template_name = 'schede_tv/schedatv_confirm_delete.html'
+
+
+# ELIMINAZIONE RIGA SCHEDA TV
+class RigaSchedaTVDeleteView(LoginRequiredMixin, DeleteView):
+    model = RigaSchedaTV
+
+    def get_success_url(self):
+        return reverse_lazy('schedatv-update', kwargs={'pk': self.object.scheda_tv.pk})
