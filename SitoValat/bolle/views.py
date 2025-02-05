@@ -41,67 +41,54 @@ class BollaListView(LoginRequiredMixin, ListView):
         user = self.request.user
         data_inizio_str = self.request.GET.get('data_inizio')
         data_fine_str = self.request.GET.get('data_fine')
+        tipo_documento_id = self.request.GET.get('tipo_documento')
 
         # Gestione delle date
         oggi = make_aware(datetime.now())
         data_inizio = self.get_data_filtrata(data_inizio_str, oggi, inizio=True)
         data_fine = self.get_data_filtrata(data_fine_str, oggi, inizio=False)
-        if hasattr(user, "zona"):
-            conc = user.zona.concessionario
-        else:
-            conc = user.concessionario
 
-        tipo = TipoDocumento.objects.filter(concessionario=conc, nome="NTV")
+        # Filtro per tipo documento
+        if not tipo_documento_id:
+            queryset = queryset.filter(data__range=(data_inizio, data_fine))
+            return queryset
 
-        queryset = queryset.filter(tipo_documento_id=tipo, data__range=(data_inizio, data_fine))
+        queryset = queryset.filter(tipo_documento_id=tipo_documento_id, data__range=(data_inizio, data_fine))
         # print(queryset.all())
+        # print(tipo_documento_id)
         return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        if hasattr(user, "zona"):
-            conc = user.zona.concessionario
-        else:
-            conc = user.concessionario
         oggi = make_aware(datetime.now())
+
         # Gestione delle date
         data_inizio_str = self.request.GET.get('data_inizio')
         data_fine_str = self.request.GET.get('data_fine')
         data_inizio = self.get_data_filtrata(data_inizio_str, oggi, inizio=True)
         data_fine = self.get_data_filtrata(data_fine_str, oggi, inizio=False)
-
-        tipo_doc = TipoDocumento.objects.filter(concessionario=conc, nome="NTV").first
-        if tipo_doc:
-            tipo_documento_id = tipo_doc.pk
-        else:
-            tipo_documento_id = None  # Vuotoooooooooo Olè: Se non c'è il tipo NTV per quel concessionario.
+        tipo_documento_id = self.request.GET.get('tipo_documento')
 
         context['data_inizio'] = data_inizio
         context['data_fine'] = data_fine
         # print(tipo_documento_id)
         if not tipo_documento_id:
             if hasattr(user, 'zona'):
-                conc = user.zona.concessionario
-                ntv = TipoDocumento.objects.filter(concessionario=user.zona.concessionario, nome="NTV")
-                tipi = TipoDocumento.objects.filter(concessionario=user.zona.concessionario).exclude(nome="NTV")
-                context['tipi_documento'] = TipoDocumento.objects.filter(concessionario=user.zona.concessionario).exclude(nome="NTV")
-                bolle = Bolla.objects.filter(tipo_documento__in=tipi, data__range=(data_inizio, data_fine)).exclude(tipo_documento__in=ntv)
-
+                tipi = TipoDocumento.objects.filter(concessionario=user.zona.concessionario)
+                context['tipi_documento'] = TipoDocumento.objects.filter(concessionario=user.zona.concessionario)
+                bolle = Bolla.objects.filter(tipo_documento__in=tipi, data__range=(data_inizio, data_fine))
                 context['tipo_documento_id'] = ""
             elif hasattr(user, 'concessionario'):
-                conc = user.concessionario
-                ntv = TipoDocumento.objects.filter(concessionario=user.concessionario, nome="NTV")
-                tipi = TipoDocumento.objects.filter(concessionario=user.concessionario).exclude(nome="NTV")
-                context['tipi_documento'] = TipoDocumento.objects.filter(concessionario=user.concessionario).exclude(nome="NTV")
-                bolle = Bolla.objects.filter(tipo_documento__in=tipi, data__range=(data_inizio, data_fine)).exclude(tipo_documento__in=ntv)
+                tipi = TipoDocumento.objects.filter(concessionario=user.concessionario)
+                context['tipi_documento'] = TipoDocumento.objects.filter(concessionario=user.concessionario)
+                bolle = Bolla.objects.filter(tipo_documento__in=tipi, data__range=(data_inizio, data_fine))
                 context['tipo_documento_id'] = ""
             else:
                 tipi = TipoDocumento.objects.none()
                 context['tipi_documento'] = TipoDocumento.objects.none()
                 context['tipo_documento_id'] = ""
-
-            bolle = Bolla.objects.filter(tipo_documento__in=tipi, data__range=(data_inizio, data_fine), cliente__concessionario =conc).exclude(tipo_documento__in=ntv)
+            bolle = Bolla.objects.filter(tipo_documento__in=tipi, data__range=(data_inizio, data_fine))
             context['bolle'] = bolle
             return context
         else:
@@ -1654,6 +1641,7 @@ class SchedaTVListView(LoginRequiredMixin, ListView):
         else:
             tipo_documento_id = TipoDocumento.objects.none()
 
+        tipo_documento_id = tipo_documento_id.pk()
         # Gestione delle date
         oggi = make_aware(datetime.now())
         data_inizio = self.get_data_filtrata(data_inizio_str, oggi, inizio=True)
@@ -1663,8 +1651,11 @@ class SchedaTVListView(LoginRequiredMixin, ListView):
         if not tipo_documento_id:
             queryset = queryset.filter(data__range=(data_inizio, data_fine))
             return queryset
+        else:
+            queryset = queryset.filter(tipo_documento_id=tipo_documento_id, data__range=(data_inizio, data_fine))
+            return queryset
 
-        queryset = queryset.filter(tipo_documento_id=tipo_documento_id, data__range=(data_inizio, data_fine))
+
         # print(queryset.all())
         # print(tipo_documento_id)
         return queryset
@@ -1753,7 +1744,7 @@ class SchedaTVUpdateView(LoginRequiredMixin, UpdateView):
     model = SchedaTV
     fields = ['data', 'cliente', 'numero']
     template_name = 'schede_tv/schedatv_form.html'
-    success_url = reverse_lazy('schedatv-list')
+    success_url = reverse_lazy('schedetv-list')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1797,7 +1788,7 @@ class SchedaTVUpdateView(LoginRequiredMixin, UpdateView):
                 f"{reverse('schedatv-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
 
         elif 'confirm' in request.POST:
-            return redirect('schedatv-list')
+            return redirect('schedetv-list')
 
         return super().post(request, *args, **kwargs)
 

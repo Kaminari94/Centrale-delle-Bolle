@@ -87,3 +87,15 @@ class FatturaAdmin(admin.ModelAdmin):
 class RigaFatturaAdmin(admin.ModelAdmin):
     list_display = ('fattura', 'articolo', 'quantita')
     list_filter = ('fattura',)
+
+
+@admin.register(SchedaTV)
+class SchedaTVAdmin(admin.ModelAdmin):
+    list_display = ('data', 'numero', 'cliente')
+    list_filter = ('data', 'cliente')
+    search_fields = ('numero',)
+
+@admin.register(RigaSchedaTV)
+class RigaSchedaTVAdmin(admin.ModelAdmin):
+    list_display = ('scheda', 'giorno', 'articolo', 'quantita')
+    list_filter = ('scheda','articolo')
