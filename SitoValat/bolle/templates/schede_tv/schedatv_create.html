@@ -3,11 +3,11 @@
 {% block title %}Crea un Nuovo Carico{% endblock %}
 
 {% block content %}
-<h1>Crea un Nuovo Carico</h1>
+<h1>Crea una Nuova Scheda Tentata Vendita</h1>
 <form method="post">
     {% csrf_token %}
     {{ form|crispy }}
-    <button type="submit" class="btn btn-primary">OK</button>
-    <a href="{% url 'carichi-list' %}" class="btn btn-secondary">Indietro</a>
+    <button type="submit" class="btn btn-primary mt-3">OK</button>
+    <a href="{% url 'schedetv-list' %}" class="btn btn-secondary mt-3">Indietro</a>
 </form>
 {% endblock %}

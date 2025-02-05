@@ -344,6 +344,15 @@ class SchedaTV(models.Model):
     data = models.DateField(default=timezone.now)  # Usa DateField invece di mese/anno separati
     numero = models.PositiveIntegerField()
 
+    def save(self, *args, **kwargs):
+        if not self.id:  # Controlla se la bolla è nuova
+            with transaction.atomic():  # Blocca la transazione per garantire unicità
+                tipo_doc = self.tipo_documento
+                tipo_doc.ultimo_numero += 1  # Incrementa l'ultimo numero per il tipo di documento
+                self.numero = tipo_doc.ultimo_numero
+                tipo_doc.save()  # Salva il nuovo ultimo numero
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.cliente} - {self.data.strftime('%m/%Y')}"
 

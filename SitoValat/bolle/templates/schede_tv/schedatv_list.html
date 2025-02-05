@@ -1,9 +1,9 @@
 {% extends 'bolle/homepage.html' %}
 
-{% block title %}Lista Carichi{% endblock %}
+{% block title %}Lista Schede Tentata Vendita{% endblock %}
 
 {% block content %}
-<h1>Lista Carichi <a href="{% url 'carico-create' %}" class="btn btn-lg btn-success"><i class="bi bi-file-earmark-plus"></i> Nuovo</a> </h1>
+<h1>Lista Schede Tentata Vendita <a href="{% url 'schedatv-create' %}" class="btn btn-lg btn-success"><i class="bi bi-file-earmark-plus"></i> Nuovo</a> </h1>
     {% if error %}
         <div class="alert alert-danger">{{ error }}</div>
     {% endif %}
@@ -38,71 +38,70 @@
         <!-- Pulsanti -->
         <div class="col-md-3 d-flex align-items-end">
             <button type="submit" class="btn btn-primary mt-3 w-100 me-2"><i class="bi bi-filter-left"></i> Filtra</button>
-            <a href="{% url 'carichi-list' %}" class="btn btn-dark mt-3 w-100"><i class="bi bi-ban"></i> Filtri</a>
+            <a href="{% url 'schedetv-list' %}" class="btn btn-dark mt-3 w-100"><i class="bi bi-ban"></i> Filtri</a>
         </div>
     </div>
 </form>
 
-<!-- Tabella dei Carichi -->
+<!-- Tabella delle schede TV -->
 <div class="d-none d-lg-block">
 <table class="table table-bordered table-striped table-responsive">
     <thead>
         <tr>
             <!--<th>#</th>-->
             <th>Zona</th>
+            <th>Cliente</th>
             <th>Numero</th>
-            <th>Data</th>
+            <th>Mese</th>
             <th>Azioni</th>
         </tr>
     </thead>
     <tbody>
-        {% for carico in carichi %}
+        {% for scheda_tv in schede %}
             <tr>
                 <!--<td>{{ forloop.counter }}</td>-->
-                <td>{{ carico.zona.nome|default:"-" }}</td>
-                <td><a style="color: black; text-decoration: none;" href="{% url 'carico-detail' carico.pk %}">{{ carico.fornitore.nome }}<br>{{ carico.numero|default:"-" }}</a></td>
-                <td>{{ carico.data }}</td>
+                <td>{{ scheda_tv.cliente.zona.nome|default:"-" }}</td>
+                <td><a style="color: black; text-decoration: none;" href="{% url 'schedatv-detail' scheda_tv.pk %}">{{ scheda_tv.cliente.nome }}<br>{{ scheda_tv.cliente.indirizzo }}</a></td>
+                <td>{{ scheda_tv.numero|default:"-" }}</td>
+                <td>{{ scheda_tv.data|date:"F Y" }}</td>
                 <td>
                     <div class="d-none d-lg-block">
-                        <a href="{% url 'carico-detail' carico.pk %}" class="btn btn-sm btn-primary"><i class="bi bi-folder2-open"></i> Apri</a>
-                        <a href="{% url 'carico-update' carico.pk %}" class="btn btn-sm btn-warning"><i class="bi bi-pencil"></i> Modifica</a>
-                        <a href="{% url 'carico-delete' carico.pk %}" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i> Elimina</a>
+                        <a href="{% url 'schedatv-detail' scheda_tv.pk %}" class="btn btn-sm btn-primary"><i class="bi bi-folder2-open"></i> Apri</a>
+                        <a href="{% url 'schedatv-update' scheda_tv.pk %}" class="btn btn-sm btn-warning"><i class="bi bi-pencil"></i> Modifica</a>
+                        <a href="{% url 'schedatv-delete' scheda_tv.pk %}" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i> Elimina</a>
                     </div>
                 </td>
             </tr>
         {% empty %}
             <tr>
-                <td colspan="7" class="text-center">Nessun carico trovato{% if data_inizio %} dal {{ data_inizio }} {% endif %}{% if data_fine %}al {{ data_fine }}.{% endif %}</td>
+                <td colspan="7" class="text-center">Nessuna scheda TV trovata{% if data_inizio %} dal {{ data_inizio }} {% endif %}{% if data_fine %}al {{ data_fine }}.{% endif %}</td>
             </tr>
         {% endfor %}
     </tbody>
 </table>
 </div>
 
-<!-- Card del carico per smartphone -->
+<!-- Card delle schede per smartphone -->
 <div class="d-grid gap-2 d-lg-none">
-    {% for carico in carichi %}
+    {% for scheda_tv in schede %}
 <div class="card">
   <div class="card-header">
-    <span style="float: left;">{{ carico.zona.nome }} | {{ carico.zona.user.get_full_name }} | {{ carico.numero }}</span> <span style="float: right;">{{ carico.data|date:"d/m/Y" }}</span>
+    <span style="float: left;">{{ scheda_tv.cliente.zona.nome|default:"-" }} | {{ scheda_tv.numero }}</span> <span style="float: right;">{{ scheda_tv.data|date:"F Y" }}</span>
   </div>
   <div class="card-body">
-    <h5 class="card-title"><a style="color: black; text-decoration: none;" href="{% url 'carico-detail' carico.pk %}"><strong>{{ carico.fornitore.nome }}</a></strong></h5>
-    <p class="card-text">{{ carico.fornitore.indirizzo }}</p>
+    <h5 class="card-title"><a style="color: black; text-decoration: none;" href="{% url 'schedatv-detail' scheda_tv.pk %}"><strong>{{ scheda_tv.cliente.nome }}</a></strong></h5>
+    <p class="card-text">{{ scheda_tv.cliente.indirizzo }}</p>
       <div class="d-grid gap-2 d-lg-none">
-        <a href="{% url 'carico-detail' carico.pk %}" class="btn btn-sm btn-primary"><i class="bi bi-folder2-open"></i> Apri</a>
-        <a href="{% url 'carico-update' carico.pk %}" class="btn btn-sm btn-warning"><i class="bi bi-pencil"></i> Modifica</a>
-        <a href="{% url 'carico-delete' carico.pk %}" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i> Elimina</a>
+        <a href="{% url 'schedatv-detail' scheda_tv.pk %}" class="btn btn-sm btn-primary"><i class="bi bi-folder2-open"></i> Apri</a>
+        <a href="{% url 'schedatv-update' scheda_tv.pk %}" class="btn btn-sm btn-warning"><i class="bi bi-pencil"></i> Modifica</a>
+        <a href="{% url 'schedatv-delete' scheda_tv.pk %}" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i> Elimina</a>
       </div>
   </div>
   <div class="card-footer text-muted">
-    {{ carico.note|default:'-' }}
+    0
   </div>
 </div>
     {% endfor %}
-    <div class="mt-3 mb-3">
-        <i class="visually-hidden">Por lo que mas tu quieras, hasta spazio per il footer.</i>
-    </div>
 </div>
 {% endblock %}
 

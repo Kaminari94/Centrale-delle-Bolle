@@ -15,7 +15,6 @@ from django.urls import reverse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views import View
 from django.core.files.storage import default_storage
-
 from .utils.genera_pdf import genera_pdf_base64
 from .utils.parser import parse_file
 from django.utils.dateparse import parse_date
@@ -42,54 +41,67 @@ class BollaListView(LoginRequiredMixin, ListView):
         user = self.request.user
         data_inizio_str = self.request.GET.get('data_inizio')
         data_fine_str = self.request.GET.get('data_fine')
-        tipo_documento_id = self.request.GET.get('tipo_documento')
 
         # Gestione delle date
         oggi = make_aware(datetime.now())
         data_inizio = self.get_data_filtrata(data_inizio_str, oggi, inizio=True)
         data_fine = self.get_data_filtrata(data_fine_str, oggi, inizio=False)
+        if hasattr(user, "zona"):
+            conc = user.zona.concessionario
+        else:
+            conc = user.concessionario
 
-        # Filtro per tipo documento
-        if not tipo_documento_id:
-            queryset = queryset.filter(data__range=(data_inizio, data_fine))
-            return queryset
+        tipo = TipoDocumento.objects.filter(concessionario=conc, nome="NTV")
 
-        queryset = queryset.filter(tipo_documento_id=tipo_documento_id, data__range=(data_inizio, data_fine))
+        queryset = queryset.filter(tipo_documento_id=tipo, data__range=(data_inizio, data_fine))
         # print(queryset.all())
-        # print(tipo_documento_id)
         return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
+        if hasattr(user, "zona"):
+            conc = user.zona.concessionario
+        else:
+            conc = user.concessionario
         oggi = make_aware(datetime.now())
-
         # Gestione delle date
         data_inizio_str = self.request.GET.get('data_inizio')
         data_fine_str = self.request.GET.get('data_fine')
         data_inizio = self.get_data_filtrata(data_inizio_str, oggi, inizio=True)
         data_fine = self.get_data_filtrata(data_fine_str, oggi, inizio=False)
-        tipo_documento_id = self.request.GET.get('tipo_documento')
+
+        tipo_doc = TipoDocumento.objects.filter(concessionario=conc, nome="NTV").first
+        if tipo_doc:
+            tipo_documento_id = tipo_doc.pk
+        else:
+            tipo_documento_id = None  # Vuotoooooooooo Olè: Se non c'è il tipo NTV per quel concessionario.
 
         context['data_inizio'] = data_inizio
         context['data_fine'] = data_fine
         # print(tipo_documento_id)
         if not tipo_documento_id:
             if hasattr(user, 'zona'):
-                tipi = TipoDocumento.objects.filter(concessionario=user.zona.concessionario)
-                context['tipi_documento'] = TipoDocumento.objects.filter(concessionario=user.zona.concessionario)
-                bolle = Bolla.objects.filter(tipo_documento__in=tipi, data__range=(data_inizio, data_fine))
+                conc = user.zona.concessionario
+                ntv = TipoDocumento.objects.filter(concessionario=user.zona.concessionario, nome="NTV")
+                tipi = TipoDocumento.objects.filter(concessionario=user.zona.concessionario).exclude(nome="NTV")
+                context['tipi_documento'] = TipoDocumento.objects.filter(concessionario=user.zona.concessionario).exclude(nome="NTV")
+                bolle = Bolla.objects.filter(tipo_documento__in=tipi, data__range=(data_inizio, data_fine)).exclude(tipo_documento__in=ntv)
+
                 context['tipo_documento_id'] = ""
             elif hasattr(user, 'concessionario'):
-                tipi = TipoDocumento.objects.filter(concessionario=user.concessionario)
-                context['tipi_documento'] = TipoDocumento.objects.filter(concessionario=user.concessionario)
-                bolle = Bolla.objects.filter(tipo_documento__in=tipi, data__range=(data_inizio, data_fine))
+                conc = user.concessionario
+                ntv = TipoDocumento.objects.filter(concessionario=user.concessionario, nome="NTV")
+                tipi = TipoDocumento.objects.filter(concessionario=user.concessionario).exclude(nome="NTV")
+                context['tipi_documento'] = TipoDocumento.objects.filter(concessionario=user.concessionario).exclude(nome="NTV")
+                bolle = Bolla.objects.filter(tipo_documento__in=tipi, data__range=(data_inizio, data_fine)).exclude(tipo_documento__in=ntv)
                 context['tipo_documento_id'] = ""
             else:
                 tipi = TipoDocumento.objects.none()
                 context['tipi_documento'] = TipoDocumento.objects.none()
                 context['tipo_documento_id'] = ""
-            bolle = Bolla.objects.filter(tipo_documento__in=tipi, data__range=(data_inizio, data_fine))
+
+            bolle = Bolla.objects.filter(tipo_documento__in=tipi, data__range=(data_inizio, data_fine), cliente__concessionario =conc).exclude(tipo_documento__in=ntv)
             context['bolle'] = bolle
             return context
         else:
@@ -1631,23 +1643,82 @@ class SchedaTVListView(LoginRequiredMixin, ListView):
     ordering = ['-data']
 
     def get_queryset(self):
-        user = self.request.user
         queryset = super().get_queryset()
-        data_inizio = self.request.GET.get('data_inizio')
-        data_fine = self.request.GET.get('data_fine')
+        user = self.request.user
+        data_inizio_str = self.request.GET.get('data_inizio')
+        data_fine_str = self.request.GET.get('data_fine')
+        if hasattr(user, 'zona'):
+            tipo_documento_id = TipoDocumento.objects.filter(concessionario=user.zona.concessionario, nome="NTV").first()
+        elif hasattr(user, 'concessionario'):
+            tipo_documento_id = TipoDocumento.objects.filter(concessionario=user.concessionario, nome="NTV").first()
+        else:
+            tipo_documento_id = TipoDocumento.objects.none()
+
+        # Gestione delle date
+        oggi = make_aware(datetime.now())
+        data_inizio = self.get_data_filtrata(data_inizio_str, oggi, inizio=True)
+        data_fine = self.get_data_filtrata(data_fine_str, oggi, inizio=False)
+
+        # Filtro per tipo documento
+        if not tipo_documento_id:
+            queryset = queryset.filter(data__range=(data_inizio, data_fine))
+            return queryset
+
+        queryset = queryset.filter(tipo_documento_id=tipo_documento_id, data__range=(data_inizio, data_fine))
+        # print(queryset.all())
+        # print(tipo_documento_id)
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        oggi = make_aware(datetime.now())
+
+        # Gestione delle date
+        data_inizio_str = self.request.GET.get('data_inizio')
+        data_fine_str = self.request.GET.get('data_fine')
+        data_inizio = self.get_data_filtrata(data_inizio_str, oggi, inizio=True)
+        data_fine = self.get_data_filtrata(data_fine_str, oggi, inizio=False)
+        context['data_inizio'] = data_inizio
+        context['data_fine'] = data_fine
+        # print(tipo_documento_id)
 
         if hasattr(user, 'zona'):
-            zonaconc = Zona.objects.filter(pk=user.zona.pk)
+            conc = user.zona.concessionario
+            tipo = TipoDocumento.objects.filter(nome="NTV", concessionario=user.zona.concessionario)
         elif hasattr(user, 'concessionario'):
-            zonaconc = Zona.objects.filter(concessionario=user.concessionario)
+            conc = user.concessionario
+            tipo = TipoDocumento.objects.filter(concessionario=user.concessionario)
         else:
-            zonaconc = Zona.objects.none()
+            tipo = TipoDocumento.objects.none()
+        schede = SchedaTV.objects.filter(tipo_documento__concessionario = conc, tipo_documento__in= tipo, data__range=(data_inizio, data_fine))
+        context['schede_tv'] = schede
+        return context
 
-        queryset = queryset.filter(zona__in=zonaconc)
-        if data_inizio and data_fine:
-            queryset = queryset.filter(data__range=[data_inizio, data_fine])
 
-        return queryset
+    def get_data_filtrata(self, data_str, oggi, inizio=True):
+        """Funzione ausiliaria per calcolare data_inizio e data_fine"""
+        if data_str:
+            data = make_aware(datetime.strptime(data_str, '%Y-%m-%d'))
+            if inizio:
+                data = datetime.combine(data, datetime.min.time())
+                data = data.replace(hour=0, minute=0, second=0, microsecond=0)
+            else:
+                data = datetime.combine(data, datetime.max.time())
+                data = data.replace(hour=23, minute=59, second=59, microsecond=999999)
+        else:
+            # Se non viene fornita una data, si usa quella corrente
+            if inizio:
+                data = oggi.replace(hour=0, minute=0, second=0, microsecond=0)
+            else:
+                data = oggi.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+        # Verifica se la data è già aware, se sì non applicare make_aware
+        if not is_aware(data):
+            data = make_aware(data, timezone.get_current_timezone())
+
+        return data
+
 
 
 class SchedaTVDetailView(LoginRequiredMixin, DetailView):
@@ -1659,21 +1730,19 @@ class SchedaTVDetailView(LoginRequiredMixin, DetailView):
 class SchedaTVCreateView(LoginRequiredMixin, CreateView):
     model = SchedaTV
     template_name = "schede_tv/schedatv_create.html"
-    fields = ['data', 'zona', 'cliente', 'numero', 'note']
+    fields = ['data', 'cliente', 'tipo_documento']  # Aggiungi tipo_documento
 
     def get_form(self, *args, **kwargs):
         form = super().get_form(*args, **kwargs)
         user = self.request.user
-
-        if hasattr(user, 'zona'):
-            form.fields['zona'].queryset = Zona.objects.filter(pk=user.zona.pk)
-        elif hasattr(user, 'concessionario'):
-            form.fields['zona'].queryset = Zona.objects.filter(concessionario=user.concessionario)
-        else:
-            form.fields['zona'].queryset = Zona.objects.none()
-            messages.error(self.request, "Non hai i permessi per creare una scheda TV.")
-            self.success_url = reverse_lazy('home')
-
+        if hasattr(user, "zona"):
+            conc = user.zona.concessionario
+        elif hasattr(user, "concessionario"):
+            conc = user.concessionario
+        form.fields['tipo_documento'].queryset = TipoDocumento.objects.filter(concessionario= conc, nome="NTV")
+        form.fields['cliente'].queryset = Cliente.objects.filter(concessionario = conc, tipo_documento_predefinito__nome = "NTV") or Cliente.objects.none()
+        # Puoi fare qui logica per filtrare i tipi di documento, se necessario
+        # E.g., form.fields['tipo_documento'].queryset = TipoDocumento.objects.filter(concessionario=user.concessionario)
         return form
 
     def get_success_url(self):
@@ -1682,7 +1751,7 @@ class SchedaTVCreateView(LoginRequiredMixin, CreateView):
 
 class SchedaTVUpdateView(LoginRequiredMixin, UpdateView):
     model = SchedaTV
-    fields = ['data', 'zona', 'cliente', 'numero', 'note']
+    fields = ['data', 'cliente', 'numero']
     template_name = 'schede_tv/schedatv_form.html'
     success_url = reverse_lazy('schedatv-list')
 

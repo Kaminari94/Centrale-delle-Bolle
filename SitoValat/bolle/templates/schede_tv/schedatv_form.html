@@ -1,13 +1,12 @@
 {% extends 'bolle/homepage.html' %}
 
-{% block title %}Modifica Carico{% endblock %}
+{% block title %}Modifica Scheda TV{% endblock %}
 
 {% block content %}
-<h1>Modifica Carico</h1>
+<h1>Modifica Scheda TV</h1>
 
 <h2>Aggiungi Riga</h2>
-<form method="GET" action="{% url 'carico-update' carico.pk %}">
-    <!-- Selezione della categoria -->
+<form method="GET" action="{% url 'schedatv-update' schedatv.pk %}">
     <label for="categoria" class="form-label">Categoria:</label>
     <select class="form-select" name="categoria" id="categoria" onchange="this.form.submit()">
         <option value="0">Seleziona una categoria...</option>
@@ -16,31 +15,30 @@
         {% endfor %}
     </select>
 </form>
+
 <form method="post">
     {% csrf_token %}
-    <input type="hidden" name="categoria" value="{{ categoria_selezionata }}"> <!-- per mantenere categoria selezionata -->
+    <input type="hidden" name="categoria" value="{{ categoria_selezionata }}">
     <label for="articolo" class="form-label mt-2">Articolo:</label>
     <select name="articolo" class="form-select">
         <option value="">Selezionare un articolo...</option>
         {% for categoria in categorie %}
             {% if categoria.articoli.all %}
                 <optgroup label="{{ categoria.nome }}">
-                        {% for articolo in categoria.articoli.all %}
-                            <option value="{{ articolo.id }}">{{ articolo.nome }} - {{articolo.descrizione}}</option>
-                        {% endfor %}
+                    {% for articolo in categoria.articoli.all %}
+                        <option value="{{ articolo.id }}">{{ articolo.nome }} - {{articolo.descrizione}}</option>
+                    {% endfor %}
                 </optgroup>
             {% endif %}
         {% endfor %}
     </select>
+
     <label for="quantita" class="form-label mt-2">Quantità:</label>
     <input type="number" name="quantita" min="1" class="form-control">
 
-    <label for="lotto" class="form-label mt-2">Lotto:</label>
-    <input type="text" name="lotto" class="form-control" placeholder="Inserire lotto o lasciare vuoto per generare a {{ data_lotto }}">
-
     <button type="submit" name="add_riga" class="btn btn-success mt-2">Aggiungi</button>
-
 </form>
+
 {% if messages %}
 <div class="container mt-4">
     <div class="alert alert-danger">
@@ -52,38 +50,36 @@
 {% endif %}
 
 <h2>Righe Correnti</h2>
-<div class="table table-responsive">
-<table class="table table-bordered">
-    <thead>
-        <tr>
-            <th>Codice</th>
-            <th>Descrizione</th>
-            <th>Lotto</th>
-            <th>Quantità</th>
-            <th>Azioni</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for riga in righe %}
+<div class="table-responsive">
+    <table class="table table-bordered">
+        <thead>
             <tr>
-                <td>{{ riga.articolo.nome }}</td>
-                <td>{{ riga.articolo.descrizione }}</td>
-                <td>{{ riga.lotto }}</td>
-                <td>{{ riga.quantita }}</td>
-                <td>
-                    <form method="post" action="{% url 'riga-carico-delete' riga.pk %}" style="display: inline;">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-danger btn-sm">Elimina</button>
-                    </form>
-                </td>
+                <th>Codice</th>
+                <th>Descrizione</th>
+                <th>Quantità</th>
+                <th>Azioni</th>
             </tr>
-        {% empty %}
-            <tr>
-                <td colspan="5" class="text-center">Nessuna riga aggiunta.</td>
-            </tr>
-        {% endfor %}
-    </tbody>
-</table>
+        </thead>
+        <tbody>
+            {% for riga in righe %}
+                <tr>
+                    <td>{{ riga.articolo.nome }}</td>
+                    <td>{{ riga.articolo.descrizione }}</td>
+                    <td>{{ riga.quantita }}</td>
+                    <td>
+                        <form method="post" action="{% url 'riga-schedatv-delete' riga.pk %}" style="display: inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger btn-sm">Elimina</button>
+                        </form>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="4" class="text-center">Nessuna riga aggiunta.</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
 
 <div class="mt-4 mb-5">
