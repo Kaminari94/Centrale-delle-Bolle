@@ -354,7 +354,7 @@ class SchedaTV(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.cliente} - {self.data.strftime('%m/%Y')}"
+        return f"{self.data.strftime('%m/%Y')} | {self.cliente} N.{self.numero}"
 
 class RigaSchedaTV(models.Model):
     scheda = models.ForeignKey('SchedaTV', on_delete=models.CASCADE, related_name='righe')

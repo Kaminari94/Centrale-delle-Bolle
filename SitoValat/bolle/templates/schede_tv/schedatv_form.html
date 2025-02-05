@@ -7,6 +7,7 @@
 
 <h2>Aggiungi Riga</h2>
 <form method="GET" action="{% url 'schedatv-update' schedatv.pk %}">
+
     <label for="categoria" class="form-label">Categoria:</label>
     <select class="form-select" name="categoria" id="categoria" onchange="this.form.submit()">
         <option value="0">Seleziona una categoria...</option>
@@ -36,6 +37,8 @@
     <label for="quantita" class="form-label mt-2">Quantità:</label>
     <input type="number" name="quantita" min="1" class="form-control">
 
+    <label for="giorno" class="form-label">Giorno del mese {{ schedatv.data|date:"F Y"}}:</label>
+    <input type="number" id="giorno" name="giorno" class="form-control" value='{% now "j" %}' min="1" max="31">
     <button type="submit" name="add_riga" class="btn btn-success mt-2">Aggiungi</button>
 </form>
 
@@ -54,6 +57,7 @@
     <table class="table table-bordered">
         <thead>
             <tr>
+                <th>Giorno</th>
                 <th>Codice</th>
                 <th>Descrizione</th>
                 <th>Quantità</th>
@@ -63,11 +67,12 @@
         <tbody>
             {% for riga in righe %}
                 <tr>
+                    <td>{{ riga.giorno }} {{ schedatv.data|date:"F Y" }}</td>
                     <td>{{ riga.articolo.nome }}</td>
                     <td>{{ riga.articolo.descrizione }}</td>
                     <td>{{ riga.quantita }}</td>
                     <td>
-                        <form method="post" action="{% url 'riga-schedatv-delete' riga.pk %}" style="display: inline;">
+                        <form method="post" action="{% url 'riga-schedaTV-delete' riga.pk %}" style="display: inline;">
                             {% csrf_token %}
                             <button type="submit" class="btn btn-danger btn-sm">Elimina</button>
                         </form>
@@ -75,7 +80,7 @@
                 </tr>
             {% empty %}
                 <tr>
-                    <td colspan="4" class="text-center">Nessuna riga aggiunta.</td>
+                    <td colspan="5" class="text-center">Nessuna riga aggiunta.</td>
                 </tr>
             {% endfor %}
         </tbody>

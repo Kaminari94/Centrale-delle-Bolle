@@ -49,5 +49,5 @@ urlpatterns = [
     path('schedetv/create/', SchedaTVCreateView.as_view(), name='schedatv-create'),
     path('schedetv/<int:pk>/update/', SchedaTVUpdateView.as_view(), name='schedatv-update'),
     path('schedetv/<int:pk>/delete/', SchedaTVDeleteView.as_view(), name='schedatv-delete'),
-    path('schedetv/<int:pk>/rigadelete/', RigaSchedaTVDeleteView.as_view(), name='rigaschedaTV-delete'),
+    path('schedetv/<int:pk>/rigadelete/', RigaSchedaTVDeleteView.as_view(), name='riga-schedaTV-delete'),
 ]

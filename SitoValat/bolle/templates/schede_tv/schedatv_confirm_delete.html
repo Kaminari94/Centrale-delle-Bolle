@@ -5,12 +5,12 @@
 {% block content %}
 <h1>Sei sicuro di voler eliminare questa scheda TV?</h1>
 <p><strong>Numero:</strong> {{ object.numero|default:"-" }}</p>
-<p><strong>Zona:</strong> {{ object.zona.nome|default:"-" }}</p>
+<p><strong>Cliente:</strong> {{ object.cliente.nome|default:"-" }}</p>
 <p><strong>Data:</strong> {{ object.data|date:"F Y" }}</p>
 
 <form method="post">
     {% csrf_token %}
     <button type="submit" class="btn btn-danger">Conferma Eliminazione</button>
-    <a href="{% url 'schedatv-list' %}" class="btn btn-secondary">Annulla</a>
+    <a href="{% url 'schedetv-list' %}" class="btn btn-secondary">Annulla</a>
 </form>
 {% endblock %}

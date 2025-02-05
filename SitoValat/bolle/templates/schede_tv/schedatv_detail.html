@@ -5,10 +5,9 @@
 {% block content %}
 <h2>Dettaglio Scheda TV</h2>
 <div class="container-fluid">
-    <strong>Zona:</strong> {{ schedatv.zona.nome|default:"Non specificata" }}<br>
-    <strong>Numero Scheda:</strong> {{ schedatv.numero|default:"-" }}<br>
-    <strong>Data:</strong> {{ schedatv.data|date:"F Y" }}<br>
-    <strong>Note:</strong> {{ schedatv.note|default:"Nessuna nota" }}
+    <strong>Cliente:</strong> {{ scheda_tv.cliente.nome|default:"Non specificata" }}<br>
+    <strong>Numero Scheda:</strong> {{ scheda_tv.numero|default:"-" }}<br>
+    <strong>Mese:</strong> {{ scheda_tv.data|date:"F Y" }}<br>
 </div>
 
 <h2>Righe della Scheda TV</h2>
@@ -16,22 +15,24 @@
     <thead>
         <tr>
             <th>#</th>
+            <th>Giorno</th>
             <th>Codice</th>
             <th>Descrizione</th>
             <th>Quantità</th>
         </tr>
     </thead>
     <tbody>
-        {% for riga in schedatv.righe.all %}
+        {% for riga in scheda_tv.righe.all %}
             <tr>
                 <td>{{ forloop.counter }}</td>
+                <td>{{ riga.giorno }} {{ scheda_tv.data|date:"F Y" }}</td>
                 <td>{{ riga.articolo.nome }}</td>
                 <td>{{ riga.articolo.descrizione }}</td>
                 <td>{{ riga.quantita }}</td>
             </tr>
         {% empty %}
             <tr>
-                <td colspan="4" class="text-center">Nessuna riga nella scheda.</td>
+                <td colspan="5" class="text-center">Nessuna riga nella scheda.</td>
             </tr>
         {% endfor %}
     </tbody>

@@ -1767,6 +1767,7 @@ class SchedaTVUpdateView(LoginRequiredMixin, UpdateView):
         if 'add_riga' in request.POST:
             articolo_id = request.POST.get('articolo')
             quantita = request.POST.get('quantita')
+            giorno = int(request.POST.get('giorno'))
 
             if not quantita or not quantita.isdigit() or int(quantita) <= 0:
                 messages.error(request, "Inserisci una quantità valida maggiore di 0.")
@@ -1778,10 +1779,20 @@ class SchedaTVUpdateView(LoginRequiredMixin, UpdateView):
                 return redirect(
                     f"{reverse('schedatv-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
 
+            if not giorno:
+                messages.error(request, "Inserire il giorno del mese.")
+                return redirect(
+                    f"{reverse('schedatv-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
+            elif giorno < 0 or giorno > 31:
+                messages.error(request, "Giorno non valido, inserire numero del giorno valido.")
+                return redirect(
+                    f"{reverse('schedatv-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
+
             articolo = Articolo.objects.get(pk=articolo_id)
 
             RigaSchedaTV.objects.create(
-                scheda_tv=self.get_object(),
+                scheda=self.get_object(),
+                giorno=giorno,
                 articolo=articolo,
                 quantita=int(quantita)
             )
@@ -1796,9 +1807,27 @@ class SchedaTVUpdateView(LoginRequiredMixin, UpdateView):
 
 class SchedaTVDeleteView(LoginRequiredMixin, DeleteView):
     model = SchedaTV
-    success_url = reverse_lazy('schedatv-list')
+    success_url = reverse_lazy('schedetv-list')
     template_name = 'schede_tv/schedatv_confirm_delete.html'
 
+    def post(self, request, *args, **kwargs):
+        scheda = self.get_object()
+        tipo_documento = scheda.tipo_documento
+
+        # Controlla se la bolla è l'ultima
+        ultima_scheda = SchedaTV.objects.filter(tipo_documento=tipo_documento).order_by('-numero').first()
+        if scheda != ultima_scheda:
+            messages.error(request, "Puoi eliminare solo l'ultima bolla del tipo documento.")
+            return redirect('schedetv-list')
+
+        # Decrementa l'ultimo numero del tipo documento
+        tipo_documento.ultimo_numero -= 1
+        tipo_documento.save()
+        # DEBUG print(f"Tipo documento aggiornato: {tipo_documento.nome}, ultimo numero: {tipo_documento.ultimo_numero}")
+
+        scheda.delete()
+
+        return redirect(self.success_url)
 
 class RigaSchedaTVDeleteView(LoginRequiredMixin, DeleteView):
     model = RigaSchedaTV
