@@ -1,0 +1,48 @@
+{% extends 'bolle/homepage.html' %}
+
+{% block title %}Dettaglio Carico{% endblock %}
+
+{% block content %}
+<h2>Dettaglio Carico</h2>
+<div class="container-fluid">
+    <strong>Zona:</strong> {{ carico.zona.nome|default:"Non specificata" }}<br>
+    <strong>Fornitore:</strong> {{ carico.fornitore.nome }}<br>
+    <strong>Numero Carico:</strong> {{ carico.numero|default:"-" }}<br>
+    <strong>Data:</strong> {{ carico.data }}<br>
+    <strong>Note:</strong> {{ carico.note|default:"Nessuna nota" }}
+</div>
+
+<h2>Righe del Carico</h2>
+<table class="table table-bordered table-striped">
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Codice</th>
+            <th>Descrizione</th>
+            <th>Lotto</th>
+            <th>Quantità</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for riga in carico.righe.all %}
+            <tr>
+                <td>{{ forloop.counter }}</td>
+                <td>{{ riga.articolo.nome }}</td>
+                <td>{{ riga.articolo.descrizione }}</td>
+                <td>{{ riga.lotto }}</td>
+                <td>{{ riga.quantita }}</td>
+            </tr>
+        {% empty %}
+            <tr>
+                <td colspan="5" class="text-center">Nessuna riga nel carico.</td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div class="mt-4 mb-5">
+    <a href="{% url 'carichi-list' %}" class="btn btn-secondary">Torna alla Lista</a>
+    <a href="{% url 'carico-update' carico.pk %}" class="btn btn-warning">Modifica</a>
+    <a href="{% url 'carico-delete' carico.pk %}" class="btn btn-danger">Elimina</a>
+</div>
+{% endblock %}

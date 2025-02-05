@@ -1,0 +1,109 @@
+{% extends 'bolle/homepage.html' %}
+
+{% block title %}Lista Carichi{% endblock %}
+
+{% block content %}
+<h1>Lista Carichi <a href="{% url 'carico-create' %}" class="btn btn-lg btn-success"><i class="bi bi-file-earmark-plus"></i> Nuovo</a> </h1>
+    {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+<!-- Form per i filtri -->
+<form method="get" class="mb-4">
+    <div class="row">
+        <!-- Filtro Zona -->
+        <div class="col-md-3">
+            <label for="zona" class="form-label">Zona</label>
+            <select name="zona" id="zona" class="form-select">
+                <option value="">Tutte</option>
+                {% for zona in zone %}
+                    <option value="{{ zona.id }}" {% if zona.id|stringformat:"s" == zona_id|stringformat:"s" %}selected{% endif %}>
+                        {{ zona.nome }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Filtro Data Inizio -->
+        <div class="col-md-3">
+            <label for="data_inizio" class="form-label">Data Inizio</label>
+            <input type="date" id="data_inizio" name="data_inizio" class="form-control" value="{{ data_inizio }}">
+        </div>
+
+        <!-- Filtro Data Fine -->
+        <div class="col-md-3">
+            <label for="data_fine" class="form-label">Data Fine</label>
+            <input type="date" id="data_fine" name="data_fine" class="form-control" value="{{ data_fine }}">
+        </div>
+
+        <!-- Pulsanti -->
+        <div class="col-md-3 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary mt-3 w-100 me-2"><i class="bi bi-filter-left"></i> Filtra</button>
+            <a href="{% url 'carichi-list' %}" class="btn btn-dark mt-3 w-100"><i class="bi bi-ban"></i> Filtri</a>
+        </div>
+    </div>
+</form>
+
+<!-- Tabella dei Carichi -->
+<div class="d-none d-lg-block">
+<table class="table table-bordered table-striped table-responsive">
+    <thead>
+        <tr>
+            <!--<th>#</th>-->
+            <th>Zona</th>
+            <th>Numero</th>
+            <th>Data</th>
+            <th>Azioni</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for carico in carichi %}
+            <tr>
+                <!--<td>{{ forloop.counter }}</td>-->
+                <td>{{ carico.zona.nome|default:"-" }}</td>
+                <td><a style="color: black; text-decoration: none;" href="{% url 'carico-detail' carico.pk %}">{{ carico.fornitore.nome }}<br>{{ carico.numero|default:"-" }}</a></td>
+                <td>{{ carico.data }}</td>
+                <td>
+                    <div class="d-none d-lg-block">
+                        <a href="{% url 'carico-detail' carico.pk %}" class="btn btn-sm btn-primary"><i class="bi bi-folder2-open"></i> Apri</a>
+                        <a href="{% url 'carico-update' carico.pk %}" class="btn btn-sm btn-warning"><i class="bi bi-pencil"></i> Modifica</a>
+                        <a href="{% url 'carico-delete' carico.pk %}" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i> Elimina</a>
+                    </div>
+                </td>
+            </tr>
+        {% empty %}
+            <tr>
+                <td colspan="7" class="text-center">Nessun carico trovato{% if data_inizio %} dal {{ data_inizio }} {% endif %}{% if data_fine %}al {{ data_fine }}.{% endif %}</td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<!-- Card del carico per smartphone -->
+<div class="d-grid gap-2 d-lg-none">
+    {% for carico in carichi %}
+<div class="card">
+  <div class="card-header">
+    <span style="float: left;">{{ carico.zona.nome }} | {{ carico.zona.user.get_full_name }} | {{ carico.numero }}</span> <span style="float: right;">{{ carico.data|date:"d/m/Y" }}</span>
+  </div>
+  <div class="card-body">
+    <h5 class="card-title"><a style="color: black; text-decoration: none;" href="{% url 'carico-detail' carico.pk %}"><strong>{{ carico.fornitore.nome }}</a></strong></h5>
+    <p class="card-text">{{ carico.fornitore.indirizzo }}</p>
+      <div class="d-grid gap-2 d-lg-none">
+        <a href="{% url 'carico-detail' carico.pk %}" class="btn btn-sm btn-primary"><i class="bi bi-folder2-open"></i> Apri</a>
+        <a href="{% url 'carico-update' carico.pk %}" class="btn btn-sm btn-warning"><i class="bi bi-pencil"></i> Modifica</a>
+        <a href="{% url 'carico-delete' carico.pk %}" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i> Elimina</a>
+      </div>
+  </div>
+  <div class="card-footer text-muted">
+    {{ carico.note|default:'-' }}
+  </div>
+</div>
+    {% endfor %}
+    <div class="mt-3 mb-3">
+        <i class="visually-hidden">Por lo que mas tu quieras, hasta spazio per il footer.</i>
+    </div>
+</div>
+{% endblock %}
+
+

@@ -1624,18 +1624,6 @@ def FatturaStampaView(request, pk):
     response['Content-Disposition'] = f'attachment; filename="Fattura-{nome}-N-{fattura.numero}.pdf'
     return response
 
-
-from django.shortcuts import redirect
-from django.contrib import messages
-from django.urls import reverse_lazy, reverse
-from django.utils.timezone import now
-from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Prefetch
-from .models import SchedaTV, RigaSchedaTV, Zona, Categoria, Articolo
-
-
-# LISTA SCHEDE TV
 class SchedaTVListView(LoginRequiredMixin, ListView):
     model = SchedaTV
     template_name = 'schede_tv/schedatv_list.html'
@@ -1662,14 +1650,12 @@ class SchedaTVListView(LoginRequiredMixin, ListView):
         return queryset
 
 
-# DETTAGLIO SCHEDA TV
 class SchedaTVDetailView(LoginRequiredMixin, DetailView):
     model = SchedaTV
     template_name = 'schede_tv/schedatv_detail.html'
     context_object_name = 'scheda_tv'
 
 
-# CREAZIONE SCHEDA TV
 class SchedaTVCreateView(LoginRequiredMixin, CreateView):
     model = SchedaTV
     template_name = "schede_tv/schedatv_create.html"
@@ -1694,7 +1680,6 @@ class SchedaTVCreateView(LoginRequiredMixin, CreateView):
         return reverse_lazy('schedatv-update', kwargs={'pk': self.object.pk})
 
 
-# MODIFICA SCHEDA TV
 class SchedaTVUpdateView(LoginRequiredMixin, UpdateView):
     model = SchedaTV
     fields = ['data', 'zona', 'cliente', 'numero', 'note']
@@ -1748,14 +1733,12 @@ class SchedaTVUpdateView(LoginRequiredMixin, UpdateView):
         return super().post(request, *args, **kwargs)
 
 
-# ELIMINAZIONE SCHEDA TV
 class SchedaTVDeleteView(LoginRequiredMixin, DeleteView):
     model = SchedaTV
     success_url = reverse_lazy('schedatv-list')
     template_name = 'schede_tv/schedatv_confirm_delete.html'
 
 
-# ELIMINAZIONE RIGA SCHEDA TV
 class RigaSchedaTVDeleteView(LoginRequiredMixin, DeleteView):
     model = RigaSchedaTV
 

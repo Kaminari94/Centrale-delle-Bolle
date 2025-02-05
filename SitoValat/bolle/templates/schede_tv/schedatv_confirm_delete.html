@@ -1,0 +1,17 @@
+{% extends 'bolle/homepage.html' %}
+
+{% block title %}Conferma Eliminazione{% endblock %}
+
+{% block content %}
+<h1>Sei sicuro di voler eliminare questo carico?</h1>
+<p><strong>Numero:</strong> {{ object.numero|default:"-" }}</p>
+<p><strong>Zona:</strong> {{ object.zona.nome|default:"-" }}</p>
+<p><strong>Fornitore:</strong> {{ object.fornitore.nome }}</p>
+<p><strong>Data:</strong> {{ object.data }}</p>
+
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Conferma Eliminazione</button>
+    <a href="{% url 'carichi-list' %}" class="btn btn-secondary">Annulla</a>
+</form>
+{% endblock %}
