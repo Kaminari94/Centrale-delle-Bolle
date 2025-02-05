@@ -375,7 +375,6 @@ class ConfirmImportView(View):
                         tipo_documento=tipo_doc,
                         data=data,
                         numero=current_bolla_number,
-                        defaults={"note": f"Importato il {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"},
                     ).first()
 
                     if not bolla_obj:
@@ -384,7 +383,7 @@ class ConfirmImportView(View):
                             tipo_documento=tipo_doc,
                             data=data,
                             numero=current_bolla_number,
-                            defaults={"note": f"Importato il {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"},
+                            note = f"Importato il {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
                         )
                         bolla_obj.save(skip_auto_number=True)
                         # DA PROVARE nuovo import. Dovrebbe funzionare ora.
