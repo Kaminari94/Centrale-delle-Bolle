@@ -1512,6 +1512,7 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
                 concessionario = user.concessionario
             tipo_rf = TipoDocumento.objects.filter(nome="RF", concessionario = concessionario).first()
             tipo_cls = TipoDocumento.objects.filter(nome="CLS", concessionario = concessionario).first()
+            tipo_ntv = TipoDocumento.objects.filter(nome="NTV", concessionario=concessionario).first()
             if cliente.tipo_documento_predefinito == tipo_rf:
                 # DEBUG print("hello")
                 # Recupera le bolle dei clienti CLS
@@ -1519,13 +1520,20 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
                     tipo_documento = tipo_cls,
                     data__range=(data_inizio, data_fine)
                 )
+            elif cliente.tipo_documento_predefinito == tipo_ntv:
+                bolle_cliente = SchedaTV.objects.filter(
+                    cliente = cliente,
+                    data__range = (data_inizio, data_fine)
+                )
             else:
                 # Recupera le bolle del cliente per il mese selezionato
                 bolle_cliente = Bolla.objects.filter(
                     cliente=cliente,
                     data__range=(data_inizio, data_fine)
                 )
-
+           # if cliente.tipo_documento_predefinito == tipo_ntv:
+           # DEBUG     print(bolle_cliente.first().righe.all())
+           #     return redirect('fattura-update', pk=self.get_object().pk)
             # Calcola i totali per ogni articolo
             riepilogo = defaultdict(lambda: {"quantita": 0, "articolo": None})
             for bolla in bolle_cliente:
@@ -1570,19 +1578,19 @@ class FatturaCreateView(LoginRequiredMixin, CreateView):
         if hasattr(user, 'zona'):
             # L'utente ha una zona: Mostra solo i clienti della zona
             zona = user.zona
-            concessionario = zona.concessionario
-            form.fields['cliente'].queryset = Cliente.objects.filter(zona=user.zona)
-            form.fields['concessionario'].queryset = Concessionario.objects.filter(pk = concessionario.pk)
+            conc = zona.concessionario
         elif hasattr(user, 'concessionario'):
             # L'utente ha un concessionario: Mostra tutti i clienti del concessionario
-            form.fields['cliente'].queryset = Cliente.objects.filter(concessionario=user.concessionario)
-            form.fields['concessionario'].queryset = Concessionario.objects.filter(pk = user.concessionario.pk)
+            conc = user.concessionario
         else:
             # L'utente non ha né zona né concessionario: Negare l'accesso
             form.fields['cliente'].queryset = Cliente.objects.none()
             form.fields['concessionario'].queryset = Concessionario.objects.none()
             messages.error(self.request, "Non hai i permessi per creare una bolla.")
             self.success_url = reverse_lazy('fatture-list')
+
+        form.fields['cliente'].queryset = Cliente.objects.filter(concessionario=conc).exclude(tipo_documento_predefinito__nome="CLS")
+        form.fields['concessionario'].queryset = Concessionario.objects.filter(pk = conc.pk)
         form.fields['data'].label = "Data fattura:"
         form.fields['cliente'].label = "Cliente:"
         form.fields['tipo_fattura'].label = "Tipo Fattura"
