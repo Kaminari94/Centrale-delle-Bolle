@@ -62,7 +62,9 @@
             border-radius: 12px;
             transition: all 0.2s ease-in-out;
         }
-
+        body {
+            padding-bottom: 60px; /* Altezza del footer */
+        }
         .home-card:hover {
             transform: translateY(-3px);
             box-shadow: 0px 8px 16px rgba(0, 0, 0, 0.15);
@@ -227,9 +229,6 @@
             </div>
         {% endif %}
         {% endblock %}
-    </div>
-    <div class="visually-hidden mb-5">
-        Spazio per il footer
     </div>
     <div class="d-none d-lg-block">
     <footer class="fixed-bottom navbar-light bg-light text-center text-muted py-2">
