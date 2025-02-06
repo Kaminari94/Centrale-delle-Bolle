@@ -234,13 +234,14 @@ class BollaCreateView(LoginRequiredMixin, CreateView):
     def get_form(self, *args, **kwargs):
         form = super().get_form(*args, **kwargs)
         user = self.request.user
-
         if hasattr(user, 'zona'):
             # L'utente ha una zona: Mostra solo i clienti della zona
-            form.fields['cliente'].queryset = Cliente.objects.filter(zona=user.zona)
+            form.fields['cliente'].queryset = Cliente.objects.filter(zona=user.zona).exclude(
+            tipo_documento_predefinito__nome="NTV")
         elif hasattr(user, 'concessionario'):
             # L'utente ha un concessionario: Mostra tutti i clienti del concessionario
-            form.fields['cliente'].queryset = Cliente.objects.filter(concessionario=user.concessionario)
+            form.fields['cliente'].queryset = Cliente.objects.filter(concessionario=user.concessionario).exclude(
+            tipo_documento_predefinito__nome="NTV")
         else:
             # L'utente non ha né zona né concessionario: Negare l'accesso
             form.fields['cliente'].queryset = Cliente.objects.none()
