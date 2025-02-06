@@ -1638,7 +1638,6 @@ class SchedaTVListView(LoginRequiredMixin, ListView):
             tipo_documento_id = TipoDocumento.objects.filter(concessionario=user.zona.concessionario, nome="NTV").first().pk
         elif hasattr(user, 'concessionario'):
             tipo_documento_id = TipoDocumento.objects.filter(concessionario=user.concessionario, nome="NTV").first().pk
-            print(tipo_documento_id)
         else:
             tipo_documento_id = TipoDocumento.objects.none()
 
@@ -1685,6 +1684,13 @@ class SchedaTVListView(LoginRequiredMixin, ListView):
             tipo = TipoDocumento.objects.none()
         schede = SchedaTV.objects.filter(data__range=(data_inizio, data_fine))
         context['schede_tv'] = schede
+        mesi_italiani = {
+            "Gennaio": "01", "Febbraio": "02", "Marzo": "03",
+            "Aprile": "04", "Maggio": "05", "Giugno": "06",
+            "Luglio": "07", "Agosto": "08", "Settembre": "09",
+            "Ottobre": "10", "Novembre": "11", "Dicembre": "12"
+        }
+        context['mesi'] = mesi_italiani
         return context
 
 
@@ -1834,3 +1840,51 @@ class RigaSchedaTVDeleteView(LoginRequiredMixin, DeleteView):
 
     def get_success_url(self):
         return reverse_lazy('schedatv-update', kwargs={'pk': self.object.scheda_tv.pk})
+
+class CreaSchedeTV(View):
+    template_name = "schede_tv/crea_schede.html"
+    success_url = reverse_lazy('schedetv-list')
+    def get(self, request):
+
+        user = self.request.user
+        mese = self.request.GET.get("mese")
+        if not mese:
+            messages.error(request, f"Selezionare il mese per cui creare le schede.")
+            return redirect(self.success_url)
+        else:
+            mese = int(mese)
+
+        if hasattr(user, "zona"):
+            conc = user.zona.concessionario
+        elif hasattr(user, "concessionario"):
+            conc = user.concessionario
+        else:
+            conc = Concessionario.objects.none()
+
+        tipo_doc = TipoDocumento.objects.filter(nome="NTV", concessionario=conc).first()
+        print(str(mese))
+        # Recupera data di oggi e aggiungici un mese
+        data_inizio = timezone.now().replace(day=1, month=mese)
+        # data_inizio = data_inizio + relativedelta(months=1)
+        print("Oggi: ", timezone.now(), " Prossimo mese: ", data_inizio)
+
+        clienti = Cliente.objects.filter(concessionario = conc, tipo_documento_predefinito = tipo_doc)
+        numero = 0
+        try:
+            for cliente in clienti:
+
+                SchedaTV.objects.create(
+                    cliente = cliente,
+                    tipo_documento = tipo_doc,
+                    data = data_inizio,
+                )
+                numero += 1
+
+            messages.success(request, f"Create {numero} schede per {_date(data_inizio, "F Y")}")
+            return redirect(self.success_url)
+
+        except Exception as e:
+            messages.error(request, f"Scheda per cliente non creata. Errore imprevisto.")
+            return redirect(self.success_url)
+
+

@@ -3,9 +3,34 @@
 {% block title %}Lista Schede Tentata Vendita{% endblock %}
 
 {% block content %}
-<h1>Lista Schede Tentata Vendita <a href="{% url 'schedatv-create' %}" class="btn btn-lg btn-success"><i class="bi bi-file-earmark-plus"></i> Nuovo</a> </h1>
-    {% if error %}
-        <div class="alert alert-danger">{{ error }}</div>
+<div class="col-auto mb-3 mt-3"><h1>Lista Schede Tentata Vendita <a href="{% url 'schedatv-create' %}" class="btn btn-lg btn-success"><i class="bi bi-file-earmark-plus"></i> Nuovo</a></h1></div>
+<div class="mb-3 mt-3 col-auto">
+    <h3>Crea automaticamente Schede TV:</h3>
+    <form method="get" action="{% url 'crea-schede'%}">
+        <label for="mese">Mese di:</label>
+        <select name="mese" id="mese" class="form-select">
+            <option value="" selected>Seleziona un mese...</option>
+            {% for mese, valore in mesi.items %}
+                <option value="{{ valore }}">
+                    {{ mese }} {% now "Y" %}
+                </option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-secondary mt-3 me-2"><i class="bi bi-box-arrow-up"></i> Bulk Crea Schede</button>
+    </form>
+</div>
+    {% if messages %}
+        {% for message in messages %}
+            {% if message.tags == 'error' %}
+                <div class="alert alert-danger mt-3">
+                    <p>{{ message }}</p>
+                </div>
+            {% elif message.tags == 'success' %}
+                <div class="alert alert-success mt-3">
+                    <p>{{ message }}</p>
+                </div>
+            {% endif %}
+        {% endfor %}
     {% endif %}
 <!-- Form per i filtri -->
 <form method="get" class="mb-4">
@@ -89,7 +114,7 @@
     <span style="float: left;">{{ scheda_tv.cliente.zona.nome|default:"-" }} | {{ scheda_tv.numero }}</span> <span style="float: right;">{{ scheda_tv.data|date:"F Y" }}</span>
   </div>
   <div class="card-body">
-    <h5 class="card-title"><a style="color: black; text-decoration: none;" href="{% url 'schedatv-detail' scheda_tv.pk %}"><strong>{{ scheda_tv.cliente.nome }}</a></strong></h5>
+    <h5 class="card-title"><a style="color: black; text-decoration: none;" href="{% url 'schedatv-detail' scheda_tv.pk %}"><strong>{{ scheda_tv.cliente.nome }}</strong></a></strong></h5>
     <p class="card-text">{{ scheda_tv.cliente.indirizzo }}</p>
       <div class="d-grid gap-2 d-lg-none">
         <a href="{% url 'schedatv-detail' scheda_tv.pk %}" class="btn btn-sm btn-primary"><i class="bi bi-folder2-open"></i> Apri</a>
