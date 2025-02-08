@@ -1845,7 +1845,7 @@ class RigaSchedaTVDeleteView(LoginRequiredMixin, DeleteView):
     model = RigaSchedaTV
 
     def get_success_url(self):
-        return reverse_lazy('schedatv-update', kwargs={'pk': self.object.scheda_tv.pk})
+        return reverse_lazy('schedatv-update', kwargs={'pk': self.object.scheda.pk})
 
 class CreaSchedeTV(View):
     template_name = "schede_tv/crea_schede.html"
