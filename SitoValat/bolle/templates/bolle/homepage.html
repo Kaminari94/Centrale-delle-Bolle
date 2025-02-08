@@ -149,6 +149,12 @@
                     </a>
                 </div>
                 <div class="col-6">
+                    <a href="{% url 'schedetv-list' %}" class="card shadow-sm home-card">
+                        <i class="bi bi-card-list display-4 ico-home-color1 pt-3"></i>
+                        <p class="fw-bold text-dark mt-2">Schede TV</p>
+                    </a>
+                </div>
+                <div class="col-6">
                     <a href="{% url 'fatture-list' %}" class="card shadow-sm home-card">
                         <i class="bi bi-filetype-xml display-4 ico-home-color2 pt-3"></i>
                         <p class="fw-bold text-dark mt-2">Fatture</p>
@@ -166,7 +172,7 @@
                         <p class="fw-bold text-dark mt-2">Reso</p>
                     </a>
                 </div>
-                <div class="col-6 offset-3">
+                <div class="col-6">
                     <a href="{% url 'menu-riepiloghi' %}" class="card shadow-sm home-card mb-5">
                         <i class="bi bi-graph-up-arrow display-4 ico-home-color5 pt-3"></i>
                         <p class="fw-bold text-dark mt-2">Riepiloghi</p>
@@ -180,6 +186,12 @@
                 <a href="{% url 'bolle-list' %}" class="text-decoration-none">
                     <i class="bi bi-receipt-cutoff display-4 ico-home-color1"></i>
                     <p class="mt-2 fw-bold text-dark">Lista Bolle</p>
+                </a>
+            </div>
+            <div class="card text-center p-3 shadow hover-effect" style="width: 180px;">
+                <a href="{% url 'schedetv-list' %}" class="text-decoration-none">
+                    <i class="bi bi-card-list display-4 ico-home-color2"></i>
+                    <p class="mt-2 fw-bold text-dark">Lista Schede TV</p>
                 </a>
             </div>
             <div class="card text-center p-3 shadow hover-effect" style="width: 180px;">

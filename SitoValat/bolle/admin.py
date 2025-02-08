@@ -11,6 +11,7 @@ class CategoriaAdmin(admin.ModelAdmin):
 class ClienteAdmin(admin.ModelAdmin):
     list_display = ('codice','nome', 'indirizzo', 'proprietario', 'zona')
     list_filter = ('zona', 'concessionario')
+    search_fields = ('nome',)
 
 @admin.register(Proprietario)
 class ClienteAdmin(admin.ModelAdmin):
