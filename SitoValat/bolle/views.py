@@ -1665,14 +1665,11 @@ class SchedaTVListView(LoginRequiredMixin, ListView):
             return queryset
 
 
-        # print(queryset.all())
-        # print(tipo_documento_id)
-        return queryset
-
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
         oggi = make_aware(datetime.now())
+        oggi = oggi.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
         # Gestione delle date
         data_inizio_str = self.request.GET.get('data_inizio')

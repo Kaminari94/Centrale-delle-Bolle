@@ -20,6 +20,9 @@
 <form method="post">
     {% csrf_token %}
     <input type="hidden" name="categoria" value="{{ categoria_selezionata }}">
+    <label for="giorno" class="form-label">Giorno del mese {{ schedatv.data|date:"F Y"}}:</label>
+    <input type="number" id="giorno" name="giorno" class="form-control" value='{% now "j" %}' min="1" max="31">
+
     <label for="articolo" class="form-label mt-2">Articolo:</label>
     <select name="articolo" class="form-select">
         <option value="">Selezionare un articolo...</option>
@@ -32,14 +35,13 @@
                 </optgroup>
             {% endif %}
         {% endfor %}
+
     </select>
 
     <label for="quantita" class="form-label mt-2">Quantità:</label>
     <input type="number" name="quantita" min="1" class="form-control">
-
-    <label for="giorno" class="form-label">Giorno del mese {{ schedatv.data|date:"F Y"}}:</label>
-    <input type="number" id="giorno" name="giorno" class="form-control" value='{% now "j" %}' min="1" max="31">
     <button type="submit" name="add_riga" class="btn btn-success mt-2">Aggiungi</button>
+
 </form>
 
 {% if messages %}
