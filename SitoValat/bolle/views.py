@@ -1886,7 +1886,7 @@ class CreaSchedeTV(View):
                 )
                 numero += 1
 
-            messages.success(request, f"Create {numero} schede per {_date(data_inizio, "F Y")}")
+            messages.success(request, f"Create {numero} schede per {_date(data_inizio, 'F Y')}")
             return redirect(self.success_url)
 
         except Exception as e:
