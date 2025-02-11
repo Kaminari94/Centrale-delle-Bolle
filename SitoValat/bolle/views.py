@@ -1761,17 +1761,23 @@ class SchedaTVUpdateView(LoginRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        cliente = self.object.cliente
         categoria_selezionata = self.request.GET.get('categoria')
         context["categoria_selezionata"] = categoria_selezionata
+        if categoria_selezionata is None or categoria_selezionata is "0":
+            # Se user non seleziona categoria, mostra articoli valat
+            articoli_concessi = ArticoliConcessi.objects.filter(
+                proprietario=cliente.proprietario
+            ).values_list('articolo', flat=True)
 
-        # Righe associate alla scheda TV
+        else:
+            articoli_concessi = Articolo.objects.filter(categoria_id = categoria_selezionata)
+            # Ottieni gli articoli concessi al proprietario del cliente
+
         context['righe'] = self.object.righe.all()
-
-        # Categorie e articoli disponibili
         context['categorie'] = Categoria.objects.prefetch_related(
-            Prefetch('articoli', queryset=Articolo.objects.filter(categoria_id=categoria_selezionata).order_by('nome'))
+            Prefetch('articoli', queryset=Articolo.objects.filter(pk__in=articoli_concessi).order_by('nome'))
         ).order_by('ordine')
-
         return context
 
     def post(self, request, *args, **kwargs):
