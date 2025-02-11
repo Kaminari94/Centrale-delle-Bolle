@@ -23,7 +23,7 @@ import os
 from django.utils.timezone import make_aware, now, is_aware
 from django.db.models import Sum, Q, F
 from django.utils import timezone
-
+from django.conf import settings
 
 class HomePageView(TemplateView):
     template_name = 'bolle/homepage.html'
@@ -552,7 +552,7 @@ class ExportBolleView(View):
 
         linee.append("B99                                                                                                                                            ")
         file_name = f"014-CESSIONE-{data.strftime('%y%m%d')}"
-        file_path = os.path.join("/temp/", file_name)
+        file_path = os.path.join(settings.BASE_DIR, 'temp', file_name)
         with open(file_path, "w", encoding="utf-8") as file:
             file.writelines(line + "\n" for line in linee)
 
