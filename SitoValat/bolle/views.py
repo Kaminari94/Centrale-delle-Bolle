@@ -1658,10 +1658,10 @@ class SchedaTVListView(LoginRequiredMixin, ListView):
 
         # Filtro per tipo documento
         if not tipo_documento_id:
-            queryset = queryset.filter(data__range=(data_inizio, data_fine))
+            queryset = queryset.filter(data__range=(data_inizio, data_fine)).order_by('cliente__nome')
             return queryset
         else:
-            queryset = queryset.filter(tipo_documento_id=tipo_documento_id, data__range=(data_inizio, data_fine))
+            queryset = queryset.filter(tipo_documento_id=tipo_documento_id, data__range=(data_inizio, data_fine)).order_by('cliente__nome')
             return queryset
 
 
@@ -1688,7 +1688,7 @@ class SchedaTVListView(LoginRequiredMixin, ListView):
             tipo = TipoDocumento.objects.filter(nome="NTV", concessionario=user.concessionario)
         else:
             tipo = TipoDocumento.objects.none()
-        schede = SchedaTV.objects.filter(data__range=(data_inizio, data_fine))
+        schede = SchedaTV.objects.filter(data__range=(data_inizio, data_fine)).order_by("cliente__nome")
         context['schede_tv'] = schede
         mesi_italiani = {
             "Gennaio": "01", "Febbraio": "02", "Marzo": "03",
@@ -1882,7 +1882,7 @@ class CreaSchedeTV(View):
         # data_inizio = data_inizio + relativedelta(months=1)
         print("Oggi: ", timezone.now(), " Prossimo mese: ", data_inizio)
 
-        clienti = Cliente.objects.filter(concessionario = conc, tipo_documento_predefinito = tipo_doc)
+        clienti = Cliente.objects.filter(concessionario = conc, tipo_documento_predefinito = tipo_doc).order_by("nome")
         numero = 0
         try:
             for cliente in clienti:
