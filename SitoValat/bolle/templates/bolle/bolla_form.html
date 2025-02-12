@@ -6,7 +6,7 @@
 <h1>Modifica Bolla</h1>
 
 <h2>Aggiungi Riga</h2>
-{% if not bolla.cliente.proprietario %}
+{% if bolla.tipo_documento.nome != "CLS" %}
 <form method="GET" action="{% url 'bolla-update' bolla.pk %}">
     <!-- Selezione della categoria -->
     <label class="mt-2 form-label" for="categoria">Categoria:</label>

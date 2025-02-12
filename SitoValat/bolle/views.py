@@ -168,16 +168,18 @@ class BollaUpdateView(LoginRequiredMixin, UpdateView):
         context = super().get_context_data(**kwargs)
         cliente = self.object.cliente
         categoria_selezionata = self.request.GET.get('categoria')
-        context["categoria_selezionata"] = categoria_selezionata
-        if cliente.proprietario is None:
-            # Se il cliente non ha un proprietario, mostra tutti gli articoli
-            articoli_concessi = Articolo.objects.filter(categoria_id = categoria_selezionata)
-
-        else:
-            # Ottieni gli articoli concessi al proprietario del cliente
+        if categoria_selezionata is None:
+            categoria_selezionata = 0
+        categoria_selezionata = int(categoria_selezionata)
+        context["categoria_selezionata"] = str(categoria_selezionata)
+        if categoria_selezionata == 0:
+            # Se user non seleziona categoria, mostra articoli del proprietario (valat di solito)
             articoli_concessi = ArticoliConcessi.objects.filter(
                 proprietario=cliente.proprietario
             ).values_list('articolo', flat=True)
+        else:
+            articoli_concessi = Articolo.objects.filter(categoria_id = categoria_selezionata)
+        # Ottieni gli articoli concessi al proprietario del cliente
 
         context['righe'] = self.object.righe.all()
         context['categorie'] = Categoria.objects.prefetch_related(
@@ -1431,20 +1433,25 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
         context = super().get_context_data(**kwargs)
         cliente = self.object.cliente
         categoria_selezionata = self.request.GET.get('categoria')
-        context["categoria_selezionata"] = categoria_selezionata
-        if cliente.proprietario is None:
-            # Se il cliente non ha un proprietario, mostra tutti gli articoli
-            articoli_concessi = Articolo.objects.filter(categoria_id = categoria_selezionata)
-        else:
-            # Ottieni gli articoli concessi al proprietario del cliente
+        if categoria_selezionata is None:
+            categoria_selezionata = 0
+        categoria_selezionata = int(categoria_selezionata)
+        context["categoria_selezionata"] = str(categoria_selezionata)
+        if categoria_selezionata == 0:
+            # Se user non seleziona categoria, mostra articoli valat
             articoli_concessi = ArticoliConcessi.objects.filter(
                 proprietario=cliente.proprietario
             ).values_list('articolo', flat=True)
+            categoria_selezionata = 0
+        else:
+            articoli_concessi = Articolo.objects.filter(categoria_id = categoria_selezionata)
+            # Ottieni gli articoli concessi al proprietario del cliente
 
         context['righe'] = self.object.righe.all()
         context['categorie'] = Categoria.objects.prefetch_related(
-            Prefetch('articoli', queryset=Articolo.objects.filter(pk__in=articoli_concessi, categoria_id = categoria_selezionata).order_by('nome'))
+            Prefetch('articoli', queryset=Articolo.objects.filter(pk__in=articoli_concessi).order_by('nome'))
         ).order_by('ordine')
+
         context['mesi'] = [
             {'numero': i, 'nome': _date(datetime(1900, i, 1), "F")}
             for i in range(1, 13)
@@ -1765,7 +1772,8 @@ class SchedaTVUpdateView(LoginRequiredMixin, UpdateView):
         categoria_selezionata = self.request.GET.get('categoria')
         if categoria_selezionata is None:
             categoria_selezionata = 0
-        context["categoria_selezionata"] = categoria_selezionata
+        categoria_selezionata = int(categoria_selezionata)
+        context["categoria_selezionata"] = str(categoria_selezionata)
         if categoria_selezionata == 0:
             # Se user non seleziona categoria, mostra articoli valat
             articoli_concessi = ArticoliConcessi.objects.filter(
