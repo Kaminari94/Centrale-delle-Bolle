@@ -1763,13 +1763,15 @@ class SchedaTVUpdateView(LoginRequiredMixin, UpdateView):
         context = super().get_context_data(**kwargs)
         cliente = self.object.cliente
         categoria_selezionata = self.request.GET.get('categoria')
+        if categoria_selezionata is None:
+            categoria_selezionata = 0
         context["categoria_selezionata"] = categoria_selezionata
-        if categoria_selezionata is None or categoria_selezionata is "0":
+        if categoria_selezionata == 0:
             # Se user non seleziona categoria, mostra articoli valat
             articoli_concessi = ArticoliConcessi.objects.filter(
                 proprietario=cliente.proprietario
             ).values_list('articolo', flat=True)
-
+            categoria_selezionata = 0
         else:
             articoli_concessi = Articolo.objects.filter(categoria_id = categoria_selezionata)
             # Ottieni gli articoli concessi al proprietario del cliente
