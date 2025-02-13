@@ -3,7 +3,7 @@
 {% block title %}Lista Bolle{% endblock %}
 
 {% block content %}
-<h1>Lista Bolle <a href="{% url 'bolla-create' %}" class="btn btn-lg btn-success"><i class="bi bi-file-earmark-plus"></i> Nuova</a> </h1>
+<h1>Lista Bolle <a href="{% url 'bolla-create' %}" class="btn btn-lg btn-gradient text-white"><i class="bi bi-file-earmark-plus"></i> Nuova</a> </h1>
 
     {% if messages %}
     <div class="row">
@@ -14,6 +14,7 @@
         </div>
     </div>
     {% endif %}
+
 <!-- Form per i filtri -->
 <form method="get" class="mb-4">
     <div class="row g-3 align-items-end mb-4">
@@ -43,11 +44,21 @@
         </div>
 
         <!-- Pulsanti -->
-        <div class="col-md-3 col-12 d-flex justify-content-md-end gap-2">
-            <button type="submit" class="btn btn-primary mt-3 me-2 "><i class="bi bi-filter-left"></i> Filtra</button>
-            <a href="{% url 'bolle-list' %}" class="btn btn-dark mt-3 me-2 "><i class="bi bi-ban"></i> Filtri</a>
-            <a href="{% url 'export-file' %}?data_inizio={{ data_inizio }}&data_fine={{ data_fine }}{% if tipo_documento_id %}&tipo_documento={{ tipo_documento_id }}{% endif %}"
-               class="btn btn-secondary mt-3 me-2"><i class="bi bi-box-arrow-up"></i> Esporta</a>
+        <div class="col-md-3 col-12 d-flex flex-column gap-2">
+            <!-- Bottoni per selezionare il range di date -->
+            <div class="d-flex justify-content-md-end justify-content-between gap-1 w-100">
+                <button class="btn btn-sm btn-dark w-100" id="setOggi">Oggi</button>
+                <button class="btn btn-sm btn-dark w-100" id="setSettimana">Settimana</button>
+                <button class="btn btn-sm btn-dark w-100" id="setMese">Mese</button>
+            </div>
+
+            <!-- Bottoni per Filtra, Reset Filtri ed Esporta -->
+            <div class="d-flex justify-content-md-end justify-content-between gap-1 w-100">
+                <button type="submit" class="btn btn-gradient text-white w-100"><i class="bi bi-filter-left"></i> Filtra</button>
+                <a href="{% url 'bolle-list' %}" class="btn btn-dark w-100"><i class="bi bi-ban"></i> Filtri</a>
+                <a href="{% url 'export-file' %}?data_inizio={{ data_inizio }}&data_fine={{ data_fine }}{% if tipo_documento_id %}&tipo_documento={{ tipo_documento_id }}{% endif %}"
+                   class="btn btn-secondary w-100"><i class="bi bi-box-arrow-up"></i> Esporta</a>
+            </div>
         </div>
     </div>
 </form>
@@ -76,7 +87,7 @@
                 <td>
                     <div class="d-none d-lg-block">
                         <a href="{% url 'bolla-detail' bolla.pk %}" class="btn btn-sm btn-primary"><i class="bi bi-folder2-open"></i> Apri</a>
-                        <a href="{% url 'bolla-stampa' bolla.pk %}" class="btn btn-sm btn-success" target="_blank"><i class="bi bi-printer"></i> Stampa</a>
+                        <a href="{% url 'bolla-stampa' bolla.pk %}" class="btn btn-sm btn-dark" target="_blank"><i class="bi bi-printer"></i> Stampa</a>
                         <a href="{% url 'bolla-update' bolla.pk %}" class="btn btn-sm btn-warning"><i class="bi bi-pencil"></i> Modifica</a>
                         <a href="{% url 'bolla-delete' bolla.pk %}" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i> Elimina</a>
                     </div>
@@ -117,4 +128,38 @@
         <i class="visually-hidden">Por lo que mas tu quieras, hasta spazio per il footer.</i>
     </div>
 </div>
+
+<!-- Script per bottoni selezione rapida data -->
+<script>
+    function formatDate(date) {
+        return date.toISOString().split('T')[0]; // Converte in YYYY-MM-DD per input date
+    }
+
+    // Imposta la data di oggi
+    document.getElementById("setOggi").addEventListener("click", function() {
+        let oggi = new Date();
+        document.getElementById("data_inizio").value = formatDate(oggi);
+        document.getElementById("data_fine").value = formatDate(oggi);
+    });
+
+    // Imposta la settimana corrente (Lunedì - Domenica)
+    document.getElementById("setSettimana").addEventListener("click", function() {
+        let oggi = new Date();
+        let primoGiornoSettimana = new Date(oggi.setDate(oggi.getDate() - oggi.getDay())); // Domenica
+        let ultimoGiornoSettimana = new Date(oggi.setDate(primoGiornoSettimana.getDate() + 7)); // Domenica
+
+        document.getElementById("data_inizio").value = formatDate(primoGiornoSettimana);
+        document.getElementById("data_fine").value = formatDate(ultimoGiornoSettimana);
+    });
+
+    // Imposta il mese corrente (1° giorno - Ultimo giorno)
+    document.getElementById("setMese").addEventListener("click", function() {
+        let oggi = new Date();
+        let primoGiorno = new Date(oggi.getFullYear(), oggi.getMonth(), 2);
+        let ultimoGiorno = new Date(oggi.getFullYear(), oggi.getMonth() + 1, 1);
+
+        document.getElementById("data_inizio").value = formatDate(primoGiorno);
+        document.getElementById("data_fine").value = formatDate(ultimoGiorno);
+    });
+</script>
 {% endblock %}
