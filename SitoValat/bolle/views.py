@@ -1657,19 +1657,17 @@ class SchedaTVListView(LoginRequiredMixin, ListView):
         else:
             tipo_documento_id = TipoDocumento.objects.none()
 
-        #tipo_documento_id = tipo_documento_id.pk()
+        # tipo_documento_id = tipo_documento_id.pk()
         # Gestione delle date
         oggi = make_aware(datetime.now())
         data_inizio = self.get_data_filtrata(data_inizio_str, oggi, inizio=True)
         data_fine = self.get_data_filtrata(data_fine_str, oggi, inizio=False)
 
         # Filtro per tipo documento
-        if not tipo_documento_id:
-            queryset = queryset.filter(data__range=(data_inizio, data_fine)).order_by('cliente__nome')
-            return queryset
-        else:
-            queryset = queryset.filter(tipo_documento_id=tipo_documento_id, data__range=(data_inizio, data_fine)).order_by('cliente__nome')
-            return queryset
+        print(tipo_documento_id)
+        queryset = queryset.filter(tipo_documento_id=tipo_documento_id, data__range=(data_inizio, data_fine)).order_by('cliente__nome')
+        return queryset
+
 
 
     def get_context_data(self, **kwargs):
@@ -1689,13 +1687,13 @@ class SchedaTVListView(LoginRequiredMixin, ListView):
 
         if hasattr(user, 'zona'):
             conc = user.zona.concessionario
-            tipo = TipoDocumento.objects.filter(nome="NTV", concessionario=user.zona.concessionario)
+            tipo = TipoDocumento.objects.filter(nome="NTV", concessionario=user.zona.concessionario).first().pk
         elif hasattr(user, 'concessionario'):
             conc = user.concessionario
-            tipo = TipoDocumento.objects.filter(nome="NTV", concessionario=user.concessionario)
+            tipo = TipoDocumento.objects.filter(nome="NTV", concessionario=user.concessionario).first().pk
         else:
             tipo = TipoDocumento.objects.none()
-        schede = SchedaTV.objects.filter(data__range=(data_inizio, data_fine)).order_by("cliente__nome")
+        schede = SchedaTV.objects.filter(tipo_documento_id=tipo, data__range=(data_inizio, data_fine)).order_by("cliente__nome")
         context['schede_tv'] = schede
         mesi_italiani = {
             "Gennaio": "01", "Febbraio": "02", "Marzo": "03",
