@@ -665,14 +665,24 @@ class CaricoUpdateView(LoginRequiredMixin, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         categoria_selezionata = self.request.GET.get('categoria')
-        context["categoria_selezionata"] = categoria_selezionata
+        if categoria_selezionata is None:
+            categoria_selezionata = 0
+        categoria_selezionata = int(categoria_selezionata)
+        context["categoria_selezionata"] = str(categoria_selezionata)
+        if categoria_selezionata == 0:
+            # Se user non seleziona categoria, mostra articoli del proprietario (valat di solito)
+            prop = Proprietario.objects.filter(nome="VaLat").first()
+            articoli_concessi = ArticoliConcessi.objects.filter(proprietario=prop
+            ).values_list('articolo', flat=True)
+        else:
+            articoli_concessi = Articolo.objects.filter(categoria_id = categoria_selezionata)
 
         # Righe associate al carico
         context['righe'] = self.object.righe.all()
 
         # Categorie e articoli disponibili
         context['categorie'] = Categoria.objects.prefetch_related(
-            Prefetch('articoli', queryset=Articolo.objects.filter(categoria_id = categoria_selezionata).order_by('nome'))
+            Prefetch('articoli', queryset=Articolo.objects.filter(pk__in=articoli_concessi).order_by('nome'))
         ).order_by('ordine')
         oggi = now() + timedelta(days=6)
         data_lotto = oggi.strftime('%d%m%y')
@@ -806,14 +816,24 @@ class ResoUpdateView(LoginRequiredMixin, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         categoria_selezionata = self.request.GET.get('categoria')
-        context["categoria_selezionata"] = categoria_selezionata
+        if categoria_selezionata is None:
+            categoria_selezionata = 0
+        categoria_selezionata = int(categoria_selezionata)
+        context["categoria_selezionata"] = str(categoria_selezionata)
+        if categoria_selezionata == 0:
+            # Se user non seleziona categoria, mostra articoli del proprietario (valat di solito)
+            prop = Proprietario.objects.filter(nome="VaLat").first()
+            articoli_concessi = ArticoliConcessi.objects.filter(proprietario=prop
+            ).values_list('articolo', flat=True)
+        else:
+            articoli_concessi = Articolo.objects.filter(categoria_id = categoria_selezionata)
 
         # Righe associate al carico
         context['righe'] = self.object.righe.all()
 
         # Categorie e articoli disponibili
         context['categorie'] = Categoria.objects.prefetch_related(
-            Prefetch('articoli', queryset=Articolo.objects.filter(categoria_id = categoria_selezionata).order_by('nome'))
+            Prefetch('articoli', queryset=Articolo.objects.filter(pk__in=articoli_concessi).order_by('nome'))
         ).order_by('ordine')
 
         return context
