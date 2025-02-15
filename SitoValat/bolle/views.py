@@ -1188,8 +1188,14 @@ def riepilogo_cliente(request):
     data_inizio = timezone.make_aware(data_inizio, timezone.get_current_timezone())
     data_fine = timezone.make_aware(data_fine, timezone.get_current_timezone())
     cliente = get_object_or_404(Cliente, pk=cliente_id)
-
-    bolle_cliente = Bolla.objects.filter(data__range=(data_inizio, data_fine), cliente=cliente)
+    tipo_ntv = TipoDocumento.objects.filter(nome="NTV", concessionario=concessionario).first()
+    if cliente.tipo_documento_predefinito == tipo_ntv:
+        bolle_cliente = SchedaTV.objects.filter(
+            cliente=cliente,
+            data__range=(data_inizio, data_fine)
+        )
+    else:
+        bolle_cliente = Bolla.objects.filter(data__range=(data_inizio, data_fine), cliente=cliente)
 
     # Struttura: { articolo: { descrizione, righe, totale_quant, totale_euro } }
     riepilogo = defaultdict(lambda: {
@@ -1200,11 +1206,14 @@ def riepilogo_cliente(request):
     })
 
     for bolla in bolle_cliente:
-        data_bolla = bolla.data.date()
+        if bolla.cliente.tipo_documento_predefinito != tipo_ntv:
+            data_bolla = bolla.data.date()
         for riga in bolla.righe.all():
             articolo = riga.articolo.nome
             prezzo_unitario = float(riga.articolo.prezzo_ivato)
             totale_riga = riga.quantita * prezzo_unitario
+            if bolla.cliente.tipo_documento_predefinito == tipo_ntv:
+                data_bolla = data_inizio.replace(day=riga.giorno)
 
             # Aggiorna il riepilogo per articolo
             riepilogo[articolo]["descrizione"] = riga.articolo.descrizione
