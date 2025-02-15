@@ -1679,9 +1679,17 @@ class SchedaTVListView(LoginRequiredMixin, ListView):
         user = self.request.user
         data_inizio_str = self.request.GET.get('data_inizio')
         data_fine_str = self.request.GET.get('data_fine')
+        zona = self.request.GET.get('zona')
+        if zona:
+            zona = int(zona)
+            zona = Zona.objects.filter(pk = zona)
         if hasattr(user, 'zona'):
+            if not zona:
+                zona = Zona.objects.filter(pk = user.zona.pk)
             tipo_documento_id = TipoDocumento.objects.filter(concessionario=user.zona.concessionario, nome="NTV").first().pk
         elif hasattr(user, 'concessionario'):
+            if not zona:
+                zona = Zona.objects.filter(concessionario=user.concessionario).values_list("nome", flat=True)
             tipo_documento_id = TipoDocumento.objects.filter(concessionario=user.concessionario, nome="NTV").first().pk
         else:
             tipo_documento_id = TipoDocumento.objects.none()
@@ -1692,12 +1700,10 @@ class SchedaTVListView(LoginRequiredMixin, ListView):
         data_inizio = self.get_data_filtrata(data_inizio_str, oggi, inizio=True)
         data_fine = self.get_data_filtrata(data_fine_str, oggi, inizio=False)
 
+        print(zona)
         # Filtro per tipo documento
-        print(tipo_documento_id)
-        queryset = queryset.filter(tipo_documento_id=tipo_documento_id, data__range=(data_inizio, data_fine)).order_by('cliente__nome')
+        queryset = queryset.filter(tipo_documento_id=tipo_documento_id, cliente__zona__in=zona, data__range=(data_inizio, data_fine)).order_by('cliente__nome')
         return queryset
-
-
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1706,6 +1712,7 @@ class SchedaTVListView(LoginRequiredMixin, ListView):
         oggi = oggi.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
         # Gestione delle date
+        zona = self.request.GET.get('zona')
         data_inizio_str = self.request.GET.get('data_inizio')
         data_fine_str = self.request.GET.get('data_fine')
         data_inizio = self.get_data_filtrata(data_inizio_str, oggi, inizio=True)
@@ -1713,16 +1720,26 @@ class SchedaTVListView(LoginRequiredMixin, ListView):
         context['data_inizio'] = data_inizio
         context['data_fine'] = data_fine
         # print(tipo_documento_id)
-
+        if zona:
+            zone = int(zona)
+            zone = Zona.objects.filter(pk = zona)
+        elif zona == "":
+            zone = None
+        else:
+            zone = None
         if hasattr(user, 'zona'):
-            conc = user.zona.concessionario
+            if not zone:
+                zone = Zona.objects.filter(pk= user.zona.pk)
             tipo = TipoDocumento.objects.filter(nome="NTV", concessionario=user.zona.concessionario).first().pk
         elif hasattr(user, 'concessionario'):
-            conc = user.concessionario
+            if not zone:
+                zone = Zona.objects.filter(concessionario = user.concessionario)
             tipo = TipoDocumento.objects.filter(nome="NTV", concessionario=user.concessionario).first().pk
         else:
+            if not zone:
+                zone = Zona.objects.none()
             tipo = TipoDocumento.objects.none()
-        schede = SchedaTV.objects.filter(tipo_documento_id=tipo, data__range=(data_inizio, data_fine)).order_by("cliente__nome")
+        schede = SchedaTV.objects.filter(tipo_documento_id=tipo, cliente__zona__in=zone, data__range=(data_inizio, data_fine)).order_by("cliente__nome")
         context['schede_tv'] = schede
         mesi_italiani = {
             "Gennaio": "01", "Febbraio": "02", "Marzo": "03",
@@ -1731,6 +1748,7 @@ class SchedaTVListView(LoginRequiredMixin, ListView):
             "Ottobre": "10", "Novembre": "11", "Dicembre": "12"
         }
         context['mesi'] = mesi_italiani
+        context['zone'] = zone
         return context
 
 
