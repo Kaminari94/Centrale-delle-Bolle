@@ -55,9 +55,9 @@ def genera_pdf_base64(fattura):
             c.drawString(458, altezza - 220, "{}".format(fattura.cliente.cod_dest))
         else:
             c.setFont("Helvetica-Bold", 10)
-            c.drawRightString(450, altezza - 210, "Indirizzo email pec:")
-            c.setFont("Helvetica", 10)
-            c.drawRightString(450, altezza - 220, "{}".format(fattura.cliente.pec))
+            c.drawRightString(larghezza - 50, altezza - 210, "Indirizzo email pec:")
+            c.setFont("Helvetica", 8)
+            c.drawRightString(larghezza - 50, altezza - 220, "{}".format(fattura.cliente.pec))
         c.setFont("Helvetica", 10)
 
     def disegna_footer(y):
