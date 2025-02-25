@@ -28,7 +28,7 @@
                 <option value="">Tutti</option>
                 {% for tipo in tipi_fattura %}
                     <option value="{{ tipo.id }}" {% if tipo.id|stringformat:"s" == tipo_fattura_id|stringformat:"s" %}selected{% endif %}>
-                        {{ tipo.tipo }}
+                        {{ tipo.tipo }} - {{ tipo.descrizione }}
                     </option>
                 {% endfor %}
             </select>
