@@ -308,7 +308,7 @@ class Fattura(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"Fattura {self.numero} di {self.concessionario.nome} a {self.cliente.nome} del {self.data}"
+        return f"{self.tipo_fattura.descrizione} N. {self.numero} di {self.concessionario.nome} a {self.cliente.nome} del {self.data}"
 
 class RigaFattura(models.Model):
     IVA_SCELTE = [

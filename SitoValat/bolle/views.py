@@ -1336,7 +1336,8 @@ def scarica_xml(request, pk):
     # Crea la risposta come file XML scaricabile
     response = HttpResponse(xml_content, content_type='application/xml')
     nome = fattura.cliente.nome.replace(" ", "")
-    response['Content-Disposition'] = f'attachment; filename="Fattura-{nome}-N-{fattura.numero}.xml'
+    tipo = fattura.tipo_fattura.descrizione.replace(" ", "")
+    response['Content-Disposition'] = f'attachment; filename="{tipo}-{nome}-N-{fattura.numero}.xml'
     return response
 
 class FatturaListView(LoginRequiredMixin, ListView):
@@ -1467,7 +1468,8 @@ def scarica_tutte_xml(request):
             xml_content = genera_fattura_xml(fattura)
             if xml_content:
                 nome = fattura.cliente.nome.replace(" ", "")
-                file_name = f"Fattura-{nome}-N-{fattura.numero}.xml"
+                tipo = fattura.tipo_fattura.descrizione.replace(" ", "")
+                file_name = f"{tipo}-{nome}-N-{fattura.numero}.xml"
                 zip_file.writestr(file_name, xml_content)
 
     # Prepariamo la risposta HTTP con il file ZIP
