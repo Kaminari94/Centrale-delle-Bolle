@@ -57,6 +57,10 @@
             <div class="d-flex justify-content-md-end justify-content-between gap-1 w-100">
                 <button type="submit" class="btn btn-gradient text-white w-100"><i class="bi bi-filter-left"></i> Filtra</button>
                 <a href="{% url 'fatture-list' %}" class="btn btn-dark w-100"><i class="bi bi-ban"></i> Reset Filtri</a>
+                <a href="{% url 'scarica-tutte' %}?data_inizio={{ data_inizio }}&data_fine={{ data_fine }}{% if tipo_fattura_id %}&tipo_fattura={{ tipo_fattura_id }}{% endif %}"
+                   class="btn btn-secondary w-100">
+                   <i class="bi bi-box-arrow-down"></i> Scarica
+                </a>
             </div>
         </div>
 

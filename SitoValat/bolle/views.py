@@ -1421,6 +1421,64 @@ class FatturaListView(LoginRequiredMixin, ListView):
             return oggi
 
 
+import io
+import zipfile
+
+def scarica_tutte_xml(request):
+    # Recupera le fatture filtrate secondo i parametri GET
+    data_inizio_str = request.GET.get("data_inizio")
+    data_fine_str = request.GET.get("data_fine")
+    tipo_fattura_id = request.GET.get("tipo_fattura")
+
+    mesi_italiani = {
+        "Gennaio": "01", "Febbraio": "02", "Marzo": "03",
+        "Aprile": "04", "Maggio": "05", "Giugno": "06",
+        "Luglio": "07", "Agosto": "08", "Settembre": "09",
+        "Ottobre": "10", "Novembre": "11", "Dicembre": "12"
+    }
+
+    for mese, numero in mesi_italiani.items():
+        if mese in data_inizio_str:
+            data_inizio_str = data_inizio_str.replace(mese, numero)
+            break
+    for mese, numero in mesi_italiani.items():
+        if mese in data_fine_str:
+            data_fine_str = data_fine_str.replace(mese, numero)
+            break
+
+    oggi = datetime.now().date()
+    data_inizio = datetime.strptime(data_inizio_str, "%d %m %Y") if data_inizio_str else oggi
+    data_fine = datetime.strptime(data_fine_str, "%d %m %Y").date() if data_fine_str else oggi
+    queryset = Fattura.objects.filter(data__range=(data_inizio, data_fine))
+    if tipo_fattura_id:
+        queryset = queryset.filter(tipo_fattura__id= tipo_fattura_id)
+
+    print(queryset)
+    # Se non ci sono fatture, restituisce un errore
+    if not queryset.exists():
+        messages.error(request, "Errore: Nessuna fattura trovata per il periodo selezionato")
+        return redirect('fatture-list')
+
+    # Creiamo un buffer di memoria per il file ZIP
+    zip_buffer = io.BytesIO()
+
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for fattura in queryset:
+            xml_content = genera_fattura_xml(fattura)
+            if xml_content:
+                nome = fattura.cliente.nome.replace(" ", "")
+                file_name = f"Fattura-{nome}-N-{fattura.numero}.xml"
+                zip_file.writestr(file_name, xml_content)
+
+    # Prepariamo la risposta HTTP con il file ZIP
+    zip_buffer.seek(0)
+    zip_filename = f"tutte_le_fatture_{oggi.strftime('%Y%m%d')}.zip"
+    response = HttpResponse(zip_buffer, content_type="application/zip")
+    response["Content-Disposition"] = f'attachment; filename="{zip_filename}"'
+
+    return response
+
+
 class FatturaDetailView(LoginRequiredMixin, DetailView):
     model = Fattura
     template_name = 'fatture/fattura_detail.html'  # Template per il dettaglio
