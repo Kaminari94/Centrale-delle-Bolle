@@ -364,3 +364,16 @@ class RigaSchedaTV(models.Model):
 
     def __str__(self):
         return f"{self.scheda} - Giorno {self.giorno}: {self.quantita}x {self.articolo.nome}"
+
+class PrezziPersonalizzati(models.Model):
+    cliente = models.ForeignKey('Cliente', on_delete=models.CASCADE)
+    articolo = models.ForeignKey('Articolo', on_delete=models.CASCADE)
+    prezzo = models.DecimalField(max_digits=10, decimal_places=3, default=0.0)
+
+    @property
+    def prezzo_ivato(self):
+        """Calcola il prezzo con IVA inclusa."""
+        return Decimal(format(self.prezzo * Decimal(1 + self.articolo.iva / 100), ".3f"))
+
+    def __str__(self):
+        return f"{self.cliente.nome} - {self.articolo}: {self.prezzo}, iva: {self.prezzo_ivato}"

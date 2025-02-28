@@ -2,6 +2,7 @@ from django.contrib import admin
 from .models import *
 
 admin.site.register(ArticoliConcessi)
+admin.site.register(PrezziPersonalizzati)
 
 @admin.register(Categoria)
 class CategoriaAdmin(admin.ModelAdmin):

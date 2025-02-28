@@ -1231,7 +1231,11 @@ def riepilogo_cliente(request):
             data_bolla = bolla.data.date()
         for riga in bolla.righe.all():
             articolo = riga.articolo.nome
-            prezzo_unitario = float(riga.articolo.prezzo_ivato)
+            prezzo_pers = PrezziPersonalizzati.objects.filter(articolo=riga.articolo, cliente=bolla.cliente).first()
+            if prezzo_pers:
+                prezzo_unitario = float(prezzo_pers.prezzo_ivato)
+            else:
+                prezzo_unitario = float(riga.articolo.prezzo_ivato)
             totale_riga = riga.quantita * prezzo_unitario
             if bolla.cliente.tipo_documento_predefinito == tipo_ntv:
                 data_bolla = data_inizio.replace(day=riga.giorno)
@@ -1577,6 +1581,10 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
                 return redirect(
                     f"{reverse('fattura-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
             tipo_rf = TipoDocumento.objects.filter(nome="RF", concessionario=concessionario).first()
+            articolo = get_object_or_404(Articolo, pk=articolo_id)
+            prezzo_pers = PrezziPersonalizzati.objects.filter(articolo=articolo, cliente=cliente).first()
+            if prezzo_pers:
+                prezzo = float(prezzo_pers.prezzo)
             if cliente.tipo_documento_predefinito == tipo_rf:
                 articolo = get_object_or_404(Articolo, pk=articolo_id)
                 prezzo = articolo.prezzo_tr
@@ -1645,7 +1653,10 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
 
             for riga in riepilogo.values():
                 articolo = riga["articolo"]
-                if cliente.tipo_documento_predefinito == tipo_rf:
+                prezzo_pers = PrezziPersonalizzati.objects.filter(articolo=articolo, cliente=cliente).first()
+                if prezzo_pers:
+                    prezzo = float(prezzo_pers.prezzo)
+                elif cliente.tipo_documento_predefinito == tipo_rf:
                     prezzo = articolo.prezzo_tr
                 else:
                     prezzo = articolo.prezzo
