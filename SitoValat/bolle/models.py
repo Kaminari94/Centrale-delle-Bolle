@@ -3,7 +3,7 @@ from django.db import transaction
 from django.contrib.auth.models import User
 from datetime import datetime
 from django.core.exceptions import ValidationError
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from django.utils.timezone import make_aware
 from django.utils import timezone
 
@@ -332,7 +332,13 @@ class RigaFattura(models.Model):
                 self.prezzo = self.articolo.prezzo
             self.iva = self.articolo.iva
             self.imp = (Decimal(self.prezzo) * Decimal(self.quantita))
+            bias_imp = self.imp + Decimal('0.0000001')
+            # DEBUG print(bias_imp)
+            self.imp = bias_imp.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
             self.tot_iva = Decimal(Decimal(self.imp) * (Decimal(self.iva) / 100))
+            bias_iva = self.tot_iva + Decimal('0.0001')
+            # DEBUG print(bias_iva)
+            self.tot_iva = bias_iva.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         super().save(*args, **kwargs)
 
     def __str__(self):
