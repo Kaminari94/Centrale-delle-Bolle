@@ -1207,6 +1207,7 @@ def riepilogo_cliente(request):
     data_fine = datetime.strptime(data_fine, "%Y-%m-%d")
     data_inizio = timezone.make_aware(data_inizio, timezone.get_current_timezone())
     data_fine = timezone.make_aware(data_fine, timezone.get_current_timezone())
+    data_fine = data_fine.replace(hour=23, minute=59, second=59, microsecond=999999)
     cliente = get_object_or_404(Cliente, pk=cliente_id)
     tipo_ntv = TipoDocumento.objects.filter(nome="NTV", concessionario=concessionario).first()
     if cliente.tipo_documento_predefinito == tipo_ntv:
