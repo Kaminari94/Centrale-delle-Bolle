@@ -330,7 +330,6 @@ class RigaFattura(models.Model):
             from .utils.genera_fattura import genera_fattura_xml
             if not self.prezzo:
                 self.prezzo = self.articolo.prezzo
-            self.iva = self.articolo.iva
             self.imp = (Decimal(self.prezzo) * Decimal(self.quantita))
             bias_imp = self.imp + Decimal('0.0000001')
             # DEBUG print(bias_imp)

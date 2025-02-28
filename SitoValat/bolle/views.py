@@ -1582,17 +1582,20 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
                     f"{reverse('fattura-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
             tipo_rf = TipoDocumento.objects.filter(nome="RF", concessionario=concessionario).first()
             articolo = get_object_or_404(Articolo, pk=articolo_id)
+            iva = articolo.iva
             prezzo_pers = PrezziPersonalizzati.objects.filter(articolo=articolo, cliente=cliente).first()
             if prezzo_pers:
                 prezzo = float(prezzo_pers.prezzo)
             if cliente.tipo_documento_predefinito == tipo_rf:
                 articolo = get_object_or_404(Articolo, pk=articolo_id)
                 prezzo = articolo.prezzo_tr
+                iva = 22
             RigaFattura.objects.create(
                 fattura = self.get_object(),
                 articolo_id = articolo_id,
                 prezzo = prezzo,
                 quantita = quantita,
+                iva = iva,
             )
             return redirect(f"{reverse('fattura-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
         elif 'recupera_totali' in request.POST:
@@ -1653,11 +1656,13 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
 
             for riga in riepilogo.values():
                 articolo = riga["articolo"]
+                iva = articolo.iva
                 prezzo_pers = PrezziPersonalizzati.objects.filter(articolo=articolo, cliente=cliente).first()
                 if prezzo_pers:
                     prezzo = float(prezzo_pers.prezzo)
                 elif cliente.tipo_documento_predefinito == tipo_rf:
                     prezzo = articolo.prezzo_tr
+                    iva = 22
                 else:
                     prezzo = articolo.prezzo
                 RigaFattura.objects.create(
@@ -1665,6 +1670,7 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
                     articolo=riga["articolo"],
                     quantita=riga["quantita"],
                     prezzo=prezzo,
+                    iva= iva,
                 )
                 articoli += 1
             mesetto = _date(data_inizio, "F")
