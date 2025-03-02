@@ -25,7 +25,10 @@ def genera_fattura_xml(fattura):
     xml.startElement("DatiTrasmissione", {})
     xml.startElement("IdTrasmittente", {})
     xml.addQuickElement("IdPaese", "IT")
-    xml.addQuickElement("IdCodice", fattura.concessionario.partita_iva)
+    if fattura.concessionario.codice_fiscale:
+        xml.addQuickElement("IdCodice", fattura.concessionario.codice_fiscale)
+    else:
+        xml.addQuickElement("IdCodice", fattura.concessionario.partita_iva)
     xml.endElement("IdTrasmittente")
     xml.addQuickElement("ProgressivoInvio", fattura.numero)
     xml.addQuickElement("FormatoTrasmissione", "FPR12") # FPR12 Fatture verso Privati - FPA12 Fattura verso PA
@@ -42,7 +45,7 @@ def genera_fattura_xml(fattura):
     xml.addQuickElement("IdPaese", "IT")
     xml.addQuickElement("IdCodice", fattura.concessionario.partita_iva)
     xml.endElement("IdFiscaleIVA")
-    xml.addQuickElement("CodiceFiscale", fattura.concessionario.partita_iva)  # Codice fiscale come partita IVA
+    xml.addQuickElement("CodiceFiscale", fattura.concessionario.codice_fiscale)  # Codice fiscale come partita IVA
     xml.startElement("Anagrafica", {})
     xml.addQuickElement("Denominazione", fattura.concessionario.nome)
     xml.endElement("Anagrafica")
@@ -91,6 +94,9 @@ def genera_fattura_xml(fattura):
 
     xml.startElement("DatiBeniServizi", {})
     linea = 1
+    imp4=0
+    imp10=0
+    imp22=0
     for riga in righe:
         # DEBUG print(articolo)
         # DEBUG print(dettagli)
@@ -105,32 +111,41 @@ def genera_fattura_xml(fattura):
         xml.addQuickElement("PrezzoUnitario", str(format(riga.prezzo, ".3f"))) # Col punto
         xml.addQuickElement("PrezzoTotale", str(format(riga.imp, ".2f"))) # Prezzo non ivato
         xml.addQuickElement("AliquotaIVA", str(format(riga.iva, ".2f")))
+        if riga.iva == 4.00:
+            imp4+=riga.prezzo
+        elif riga.iva == 10.00:
+            imp10+=riga.prezzo
+        elif riga.iva == 22.00:
+            imp22+=riga.prezzo
         xml.endElement("DettaglioLinee")
         linea += 1
-    xml.startElement("DatiRiepilogo", {})
-    valori = fattura.totali.get("4", {"imp": 0, "iva": 0, "tot": 0})
-    xml.addQuickElement("AliquotaIVA", "4.00")
-    xml.addQuickElement("ImponibileImporto", format(valori["imp"], ".2f"))
-    xml.addQuickElement("Imposta", format(valori["iva"], ".2f"))
-    xml.addQuickElement("EsigibilitaIVA", "I")
-    xml.addQuickElement("RiferimentoNormativo", "IVA 4%")
-    xml.endElement("DatiRiepilogo")
-    xml.startElement("DatiRiepilogo", {})
-    valori = fattura.totali.get("10", {"imp": 0, "iva": 0, "tot": 0})
-    xml.addQuickElement("AliquotaIVA", "10.00")
-    xml.addQuickElement("ImponibileImporto", format(valori["imp"], ".2f"))
-    xml.addQuickElement("Imposta", format(valori["iva"], ".2f"))
-    xml.addQuickElement("EsigibilitaIVA", "I")
-    xml.addQuickElement("RiferimentoNormativo", "IVA 10%")
-    xml.endElement("DatiRiepilogo")
-    xml.startElement("DatiRiepilogo", {})
-    valori = fattura.totali.get("22", {"imp": 0, "iva": 0, "tot": 0})
-    xml.addQuickElement("AliquotaIVA", "22.00")
-    xml.addQuickElement("ImponibileImporto", format(valori["imp"], ".2f"))
-    xml.addQuickElement("Imposta", format(valori["iva"], ".2f"))
-    xml.addQuickElement("EsigibilitaIVA", "I")
-    xml.addQuickElement("RiferimentoNormativo", "IVA 22%")
-    xml.endElement("DatiRiepilogo")
+    if imp4 != 0:
+        xml.startElement("DatiRiepilogo", {})
+        valori = fattura.totali.get("4", {"imp": 0, "iva": 0, "tot": 0})
+        xml.addQuickElement("AliquotaIVA", "4.00")
+        xml.addQuickElement("ImponibileImporto", format(valori["imp"], ".2f"))
+        xml.addQuickElement("Imposta", format(valori["iva"], ".2f"))
+        xml.addQuickElement("EsigibilitaIVA", "I")
+        xml.addQuickElement("RiferimentoNormativo", "IVA 4%")
+        xml.endElement("DatiRiepilogo")
+    if imp10 != 0:
+        xml.startElement("DatiRiepilogo", {})
+        valori = fattura.totali.get("10", {"imp": 0, "iva": 0, "tot": 0})
+        xml.addQuickElement("AliquotaIVA", "10.00")
+        xml.addQuickElement("ImponibileImporto", format(valori["imp"], ".2f"))
+        xml.addQuickElement("Imposta", format(valori["iva"], ".2f"))
+        xml.addQuickElement("EsigibilitaIVA", "I")
+        xml.addQuickElement("RiferimentoNormativo", "IVA 10%")
+        xml.endElement("DatiRiepilogo")
+    if imp22 != 0:
+        xml.startElement("DatiRiepilogo", {})
+        valori = fattura.totali.get("22", {"imp": 0, "iva": 0, "tot": 0})
+        xml.addQuickElement("AliquotaIVA", "22.00")
+        xml.addQuickElement("ImponibileImporto", format(valori["imp"], ".2f"))
+        xml.addQuickElement("Imposta", format(valori["iva"], ".2f"))
+        xml.addQuickElement("EsigibilitaIVA", "I")
+        xml.addQuickElement("RiferimentoNormativo", "IVA 22%")
+        xml.endElement("DatiRiepilogo")
     xml.endElement("DatiBeniServizi")
     # Dati Pagamento
     if fattura.modalita_pagamento == "MP05":
@@ -161,7 +176,8 @@ def genera_fattura_xml(fattura):
         xml.startElement("Allegati", {})
         xml.addQuickElement("NomeAttachment", str(fattura.tipo_fattura.descrizione) + " N" + str(fattura.numero)+ ".pdf")
         xml.addQuickElement("FormatoAttachment", "PDF")
-        xml.addQuickElement("DescrizioneAttachment", str(fattura.tipo_fattura.descrizione) + " del " + str(fattura.data) + " N. " + str(fattura.numero) + ", emessa da " + str(fattura.concessionario.nome) + " al cliente " + str(fattura.cliente.nome))
+        nome = fattura.cliente.nome.replace("'", "")
+        xml.addQuickElement("DescrizioneAttachment", str(fattura.tipo_fattura.descrizione) + " del " + str(fattura.data) + " N. " + str(fattura.numero) + ", emessa da " + str(fattura.concessionario.nome) + " al cliente " + str(nome))
         xml.addQuickElement("Attachment", fattura.pdf_file)
         xml.endElement("Allegati")
 

@@ -64,6 +64,7 @@ class Categoria(models.Model):
 
     def __str__(self):
         return self.nome
+from django.db import models
 
 class Cliente(models.Model):
     nome = models.CharField(max_length=255)
@@ -74,6 +75,7 @@ class Cliente(models.Model):
     citta = models.CharField(max_length=60, default = "")
     provincia = models.CharField(max_length=2, default = "SA")
     piva = models.CharField(max_length=20)  # Partita IVA
+    codice_fiscale = models.CharField(max_length=16, unique=True, blank=True, null=True)
     cod_dest = models.CharField(max_length=7, default="0000000") # Codice Destinatario SDI
     pec = models.CharField(max_length=50, default="")
     tipo_documento_predefinito = models.ForeignKey(
@@ -109,6 +111,7 @@ class Concessionario(models.Model):
     citta = models.CharField(max_length=60, default = "")
     provincia = models.CharField(max_length=2, default = "SA")
     header = models.CharField(max_length=20, default = "00000000000000000000")
+    codice_fiscale = models.CharField(max_length=16, unique=True, blank=True, null=True)
     partita_iva = models.CharField(max_length=20)
     telefono = models.CharField(max_length=15, blank=True, null=True)
     cons_conto = models.ForeignKey("Fornitore", on_delete=models.SET_NULL, null=True, blank=True, related_name='concessionari')
