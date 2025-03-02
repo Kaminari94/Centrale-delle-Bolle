@@ -177,7 +177,7 @@ def genera_fattura_xml(fattura):
         xml.addQuickElement("NomeAttachment", str(fattura.tipo_fattura.descrizione) + " N" + str(fattura.numero)+ ".pdf")
         xml.addQuickElement("FormatoAttachment", "PDF")
         nome = fattura.cliente.nome.replace("'", "")
-        xml.addQuickElement("DescrizioneAttachment", str(fattura.tipo_fattura.descrizione) + " del " + str(fattura.data) + " N. " + str(fattura.numero) + ", emessa da " + str(fattura.concessionario.nome) + " al cliente " + str(nome))
+        xml.addQuickElement("DescrizioneAttachment", str(fattura.tipo_fattura.descrizione) + " del " + str(fattura.data) + " N. " + str(fattura.numero) + ", emessa da " + str(fattura.concessionario.nome))
         xml.addQuickElement("Attachment", fattura.pdf_file)
         xml.endElement("Allegati")
 
