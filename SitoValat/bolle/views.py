@@ -1342,7 +1342,8 @@ def scarica_xml(request, pk):
     response = HttpResponse(xml_content, content_type='application/xml')
     nome = fattura.cliente.nome.replace(" ", "")
     tipo = fattura.tipo_fattura.descrizione.replace(" ", "")
-    response['Content-Disposition'] = f'attachment; filename="{tipo}-{nome}-N-{fattura.numero}.xml'
+    numero = str(fattura.numero).zfill(4)
+    response['Content-Disposition'] = f'attachment; filename="IT{fattura.concessionario.partita_iva}_{numero}.xml"'
     return response
 
 class FatturaListView(LoginRequiredMixin, ListView):
@@ -1459,7 +1460,6 @@ def scarica_tutte_xml(request):
     if tipo_fattura_id:
         queryset = queryset.filter(tipo_fattura__id= tipo_fattura_id)
 
-    print(queryset)
     # Se non ci sono fatture, restituisce un errore
     if not queryset.exists():
         messages.error(request, "Errore: Nessuna fattura trovata per il periodo selezionato")
@@ -1474,7 +1474,8 @@ def scarica_tutte_xml(request):
             if xml_content:
                 nome = fattura.cliente.nome.replace(" ", "")
                 tipo = fattura.tipo_fattura.descrizione.replace(" ", "")
-                file_name = f"{tipo}-{nome}-N-{fattura.numero}.xml"
+                numero = str(fattura.numero).zfill(4)
+                file_name = f"IT{fattura.concessionario.partita_iva}_{numero}.xml"
                 zip_file.writestr(file_name, xml_content)
 
     # Prepariamo la risposta HTTP con il file ZIP
