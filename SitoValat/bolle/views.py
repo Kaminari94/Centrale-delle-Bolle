@@ -1515,8 +1515,12 @@ class FatturaDeleteView(DeleteView):
             return redirect('fatture-list')
 
         # Decrementa l'ultimo numero del tipo documento
-        tipo_fattura.ultimo_numero -= 1
-        tipo_fattura.save()
+        anno_fatt = fattura.data.year
+        tipi_fattura = TipoFattura.objects.filter(anno=anno_fatt)
+        for tipo_fatt in tipi_fattura:
+            tipo_fatt.ultimo_numero -= 1
+            tipo_fatt.save()
+
         # DEBUG print(f"Tipo documento aggiornato: {tipo_documento.nome}, ultimo numero: {tipo_documento.ultimo_numero}")
 
         fattura.delete()

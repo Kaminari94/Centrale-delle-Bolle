@@ -237,6 +237,7 @@ class TipoFattura(models.Model):
     ]
     tipo = models.CharField(max_length=5, choices=TIPO_SCELTE) # Nome breve
     descrizione = models.CharField(max_length=255, blank=True, null=True)
+    anno = models.PositiveIntegerField(default=datetime.today().year)
     ultimo_numero = models.PositiveIntegerField(default=0)
     concessionario = models.ForeignKey('Concessionario', on_delete=models.CASCADE)
 
@@ -304,10 +305,13 @@ class Fattura(models.Model):
         skip_auto_number = False
         if not self.id and not skip_auto_number:  # Controlla se la fattura è nuova
             with transaction.atomic():  # Blocca la transazione per garantire unicità
-                tipo_fatt = self.tipo_fattura
-                tipo_fatt.ultimo_numero += 1  # Incrementa l'ultimo numero fattura
-                self.numero = tipo_fatt.ultimo_numero
-                tipo_fatt.save()  # Salva il nuovo ultimo numero
+                anno_fatt = self.data.year
+                tipi_fattura = TipoFattura.objects.filter(anno=anno_fatt)
+                nuovo_numero = self.tipo_fattura.ultimo_numero + 1  # Incrementa l'ultimo numero fattura
+                for tipo_fatt in tipi_fattura:
+                    tipo_fatt.ultimo_numero = nuovo_numero
+                    tipo_fatt.save()  # Salva il nuovo ultimo numero
+                self.numero = nuovo_numero
         super().save(*args, **kwargs)
 
     def __str__(self):
