@@ -650,7 +650,8 @@ class CaricoCreateView(LoginRequiredMixin, CreateView):
 
         # Filtra i fornitori (opzionale, puoi decidere di mostrare tutti i fornitori)
         form.fields['fornitore'].queryset = Fornitore.objects.all()
-
+        form.fields['fornitore'].initial = form.fields['fornitore'].queryset.first()
+        form.fields['zona'].initial = form.fields['zona'].queryset.first()
         return form
 
     def get_success_url(self):
@@ -802,6 +803,9 @@ class ResoCreateView(LoginRequiredMixin, CreateView):
             form.fields['zona'].queryset = Zona.objects.none()
             messages.error(self.request, "Non hai i permessi per creare un reso.")
             self.success_url = reverse_lazy('home')
+
+        form.fields['zona'].initial = form.fields['zona'].queryset.first()
+
         return form
 
     def get_success_url(self):
@@ -1383,7 +1387,10 @@ class FatturaListView(LoginRequiredMixin, ListView):
         data_inizio = self.get_data_filtrata(data_inizio_str, oggi, inizio=True)
         data_fine = self.get_data_filtrata(data_fine_str, oggi, inizio=False)
         tipo_fattura_id = self.request.GET.get('tipo_fattura')
-
+        if data_inizio == oggi:
+            data_inizio = data_inizio.replace(day=1)
+            data_inizio = data_inizio - relativedelta(months=1)
+            data_fine = data_inizio + relativedelta(months=1) - relativedelta(days=1)
         context['data_inizio'] = data_inizio
         context['data_fine'] = data_fine
 
@@ -1685,7 +1692,7 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
 class FatturaCreateView(LoginRequiredMixin, CreateView):
     model = Fattura
     template_name = "fatture/fattura_create.html"
-    fields = ['data', 'cliente', 'concessionario', 'tipo_fattura', 'condizioni_pagamento', 'scadenza_pagamento', 'modalita_pagamento', 'note']
+    fields = ['data', 'cliente', 'concessionario', 'tipo_fattura', 'condizioni_pagamento', 'scadenza_pagamento', 'modalita_pagamento']
 
     def get_form(self, *args, **kwargs):
         form = super().get_form(*args, **kwargs)
@@ -1705,16 +1712,27 @@ class FatturaCreateView(LoginRequiredMixin, CreateView):
             messages.error(self.request, "Non hai i permessi per creare una bolla.")
             self.success_url = reverse_lazy('fatture-list')
 
+        oggi = date.today().replace(day=1)
+        fine_mese = oggi - relativedelta(days=1)
+
         form.fields['cliente'].queryset = Cliente.objects.filter(concessionario=conc).exclude(tipo_documento_predefinito__nome="CLS")
+        form.fields['concessionario'].label = "Concessionario:"
         form.fields['concessionario'].queryset = Concessionario.objects.filter(pk = conc.pk)
+        form.fields['concessionario'].initial = Concessionario.objects.filter(pk = conc.pk).first()
         form.fields['data'].label = "Data fattura:"
+        form.fields['data'].initial = fine_mese
         form.fields['cliente'].label = "Cliente:"
-        form.fields['tipo_fattura'].label = "Tipo Fattura"
-        form.fields['condizioni_pagamento'].label = "Condizioni di Pagamento"
-        form.fields['scadenza_pagamento'].label = "Data Scadenza Pagamento"
-        form.fields['modalita_pagamento'].label = "Modalità di Pagamento"
-        form.fields['note'].label = "Eventuali Note:"
-        form.fields['note'].widget.attrs.update({'placeholder': 'Inserisci eventuali note'})
+        form.fields['tipo_fattura'].label = "Tipo Fattura:"
+        form.fields['tipo_fattura'].initial = form.fields['tipo_fattura'].queryset.filter(descrizione__contains = "Fattura").first()
+        form.fields['condizioni_pagamento'].label = "Condizioni di Pagamento:"
+        form.fields['condizioni_pagamento'].initial = "TP02"
+        form.fields['scadenza_pagamento'].label = "Data Scadenza Pagamento:"
+        form.fields['scadenza_pagamento'].initial = fine_mese
+        form.fields['modalita_pagamento'].label = "Modalità di Pagamento:"
+        form.fields['modalita_pagamento'].initial = "MP01"
+        # Rimosso perchè ... Boh non serve a un caz.
+        #form.fields['note'].label = "Eventuali Note:"
+        #form.fields['note'].widget.attrs.update({'placeholder': 'Inserisci eventuali note'})
 
         return form
 
