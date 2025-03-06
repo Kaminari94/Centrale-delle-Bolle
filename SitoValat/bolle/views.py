@@ -1556,7 +1556,7 @@ def scarica_tutte_fatture_pdf(request):
 
     buffer.seek(0) #risali all'inizio
     response = HttpResponse(buffer, content_type="application/pdf")
-    response["Content-Disposition"] = f'attachment; filename="tutte_le_fatture_del_{data_inizio_str.replace(" ", "_")}.pdf"'
+    response["Content-Disposition"] = f'attachment; filename="tutte_le_fatture_del_{data_fine_str.replace(" ", "_")}.pdf"'
 
     return response
 
