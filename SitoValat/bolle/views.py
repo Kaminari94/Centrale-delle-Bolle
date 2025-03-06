@@ -1393,7 +1393,15 @@ class FatturaListView(LoginRequiredMixin, ListView):
             data_fine = data_inizio + relativedelta(months=1) - relativedelta(days=1)
         context['data_inizio'] = data_inizio
         context['data_fine'] = data_fine
-
+        mesi_italiani = {
+            "Gennaio": "01", "Febbraio": "02", "Marzo": "03",
+            "Aprile": "04", "Maggio": "05", "Giugno": "06",
+            "Luglio": "07", "Agosto": "08", "Settembre": "09",
+            "Ottobre": "10", "Novembre": "11", "Dicembre": "12"
+        }
+        context['mesi'] = mesi_italiani
+        anno = [(datetime.now().year)-1, datetime.now().year, (datetime.now().year)+1]
+        context['anni'] = anno
         if not tipo_fattura_id:
             if hasattr(user, 'zona'):
                 tipi = TipoFattura.objects.filter(concessionario=user.zona.concessionario)
@@ -1616,7 +1624,7 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
             mese = int(request.POST.get('mese'))
             anno = int(request.POST.get('anno'))
             if not anno:
-                anno = datetime.now().year  # Puoi anche aggiungere un filtro per selezionare l'anno
+                anno = datetime.now().year
             cliente = self.get_object().cliente
 
             # Calcola il range di date per il mese
@@ -2056,3 +2064,186 @@ class CreaSchedeTV(View):
             return redirect(self.success_url)
 
 
+class CreaFattureAuto(LoginRequiredMixin, View):
+    template_name = "fatture/crea_fatture.html"
+    success_url = reverse_lazy('fatture-list')
+    login_url = "/login/"
+
+    def get(self, request):
+
+        user = self.request.user
+        mese = self.request.GET.get("mese")
+        anno = self.request.GET.get("anno")
+        if not mese:
+            messages.error(request, "Selezionare il mese per cui creare le fatture.")
+            return redirect(self.success_url)
+        else:
+            mese = int(mese)
+        if not anno:
+            messages.error(request, "Selezionare l'anno per cui creare le fatture.")
+            return redirect(self.success_url)
+        else:
+            anno = int(anno)
+
+        if hasattr(user, "zona"):
+            conc = user.zona.concessionario
+        elif hasattr(user, "concessionario"):
+            conc = user.concessionario
+        else:
+            conc = Concessionario.objects.none()
+
+        tipo_doc = TipoDocumento.objects.filter(concessionario=conc)
+        # Recupera data di oggi e aggiungici un mese
+        data_inizio = timezone.now().replace(day=1, month=mese, year=anno)
+        data_fine = timezone.now().replace(day=1, month=mese, year=anno) + relativedelta(months=1) - relativedelta(days=1)
+        print("Oggi: ", data_inizio, " Ultimo giorno mese precedente: ", data_fine)
+        clienti = Cliente.objects.filter(concessionario = conc, tipo_documento_predefinito__in=tipo_doc).order_by("nome")
+        numero = 0
+        riepilogo = []
+
+        for cliente in clienti:
+            fattura = {
+                "cliente": cliente.nome,
+                "id_cliente": cliente.id,
+                "righe": defaultdict(lambda: {"prezzo": 0.0, "quantita": 0}),
+                "errori": []
+            }
+            tipo_rf = TipoDocumento.objects.filter(nome="RF", concessionario=conc).first()
+            tipo_cls = TipoDocumento.objects.filter(nome="CLS", concessionario=conc).first()
+            tipo_ntv = TipoDocumento.objects.filter(nome="NTV", concessionario=conc).first()
+            if cliente.tipo_documento_predefinito == tipo_rf:
+                # DEBUG print("hello")
+                # Recupera le bolle dei clienti CLS
+                #bolle_cliente = Bolla.objects.filter(
+                #    tipo_documento=tipo_cls,
+                #    data__range=(data_inizio, data_fine)
+                #)
+                continue
+            elif cliente.tipo_documento_predefinito == tipo_ntv:
+                bolle_cliente = SchedaTV.objects.filter(
+                    cliente=cliente,
+                    data__range=(data_inizio, data_fine)
+                )
+            elif cliente.tipo_documento_predefinito == tipo_cls:
+                continue
+            else:
+                # Recupera le bolle del cliente per il mese selezionato
+                bolle_cliente = Bolla.objects.filter(
+                    cliente=cliente,
+                    data__range=(data_inizio, data_fine)
+                )
+
+            for bolla in bolle_cliente:
+                for riga in bolla.righe.all():
+                    articolo = riga.articolo
+                    prezzo_pers = PrezziPersonalizzati.objects.filter(articolo=articolo, cliente=cliente).first()
+                    if prezzo_pers:
+                        prezzo = float(prezzo_pers.prezzo)
+                    elif cliente.tipo_documento_predefinito == tipo_rf:
+                        prezzo = articolo.prezzo_tr
+                        iva = 22
+                    else:
+                        prezzo = articolo.prezzo
+
+                    # Aggiornamento riga
+                    if articolo.nome not in fattura["righe"]:
+                        fattura["righe"][articolo.nome] = {
+                            "prezzo":prezzo,
+                            "quantita":0
+                        }
+                    fattura["righe"][articolo.nome]["prezzo"] = float(prezzo)
+                    fattura["righe"][articolo.nome]["quantita"] += riga.quantita
+
+            # Converti defaultdict a dict normale per il template
+            if not fattura["righe"]:
+                continue
+            fattura["righe"] = dict(fattura["righe"])
+            riepilogo.append(fattura)
+            numero += 1
+
+        context = {
+            'riepilogo':riepilogo,
+            'mese': _date(data_fine, 'F Y'),
+            'total_clienti': len(riepilogo)
+        }
+        request.session['riepilogo'] = riepilogo
+        request.session['data_fine'] = data_fine.strftime('%Y-%m-%d')
+        request.session['numero'] = numero
+        request.session['concessionario'] = conc.pk
+        #print(riepilogo)
+        return render(request, 'fatture/anteprima_fatture.html', context)
+
+
+class ConfermaFattureView(View):
+    def post(self, request, *args, **kwargs):
+
+        with transaction.atomic():  # Garantisce che tutto vada a buon fine o si annulli
+            riepilogo = request.session.get('riepilogo', [])  # Recupera il riepilogo dalla sessione
+            if not riepilogo:
+                messages.error(request, f"Non ci sono articoli ordinati da nessunc cliente per il mese di {_date(data_fine, 'F Y')}")
+                return redirect('fatture-list')
+            data_fine_str = request.session.get('data_fine')
+            data_fine = datetime.strptime(data_fine_str, '%Y-%m-%d')
+            anno = data_fine.year
+            num = request.session.get('numero')
+            conc = get_object_or_404(Concessionario, pk=request.session.get('concessionario'))
+            tipo_fattura = TipoFattura.objects.filter(anno=anno, concessionario=conc, tipo="TD01").first()
+            tipo_NTV = TipoDocumento.objects.filter(concessionario = conc, nome="NTV").first()
+            tipo_NT = TipoDocumento.objects.filter(concessionario = conc, nome="NT").first()
+            numero = tipo_fattura.ultimo_numero
+            for fattura_data in riepilogo:
+                cliente = get_object_or_404(Cliente, pk=fattura_data['id_cliente'])
+                # Crea la fattura
+                if cliente.tipo_documento_predefinito == tipo_NTV:
+                    numero += 1
+                    fattura = Fattura.objects.create(
+                        cliente=cliente,
+                        data=data_fine,
+                        numero = str(numero),
+                        concessionario = conc,
+                        tipo_fattura = tipo_fattura,
+                        condizioni_pagamento = "TP02",
+                        scadenza_pagamento = data_fine,
+                        modalita_pagamento = "MP01",
+                    )
+                    fattura.numero = numero
+
+                elif cliente.tipo_documento_predefinito == tipo_NT:
+                    numero += 1
+                    fattura = Fattura.objects.create(
+                        cliente=cliente,
+                        data=data_fine,
+                        numero = str(numero),
+                        concessionario=conc,
+                        tipo_fattura=tipo_fattura,
+                        condizioni_pagamento="TP02",
+                        scadenza_pagamento=data_fine,
+                        modalita_pagamento="MP05",
+                    )
+                    fattura.numero = numero
+
+                else:
+                    break
+                # Crea le righe della fattura
+                for codice_articolo, riga_data in fattura_data['righe'].items():
+                    articolo = Articolo.objects.filter(nome=codice_articolo).first()
+                    RigaFattura.objects.create(
+                        fattura=fattura,
+                        articolo_id=articolo.pk,
+                        quantita=riga_data['quantita'],
+                        prezzo=riga_data['prezzo'],
+                        iva = articolo.iva,
+                    )
+
+                # Aggiorna il totale della fattura
+                fattura.aggiorna_totali()
+            tipi_fattura = TipoFattura.objects.filter(concessionario=conc, anno=anno)
+            for tipo_fatt in tipi_fattura:
+                tipo_fatt.ultimo_numero = numero
+                tipo_fatt.save()  # Salva il nuovo ultimo numero
+            messages.success(request, f"Create {num} fatture per {_date(data_fine, 'F Y')}")
+            return redirect('fatture-list')
+
+       # except Exception as e:
+       #     messages.error(request, f"Errore durante la creazione delle fatture: {str(e)}")
+       #     return redirect('auto-fatture')

@@ -1,0 +1,50 @@
+{% extends 'bolle/homepage.html' %}
+{% load crispy_forms_tags %}
+{% block title %}Anteprima Automazione Fatture{% endblock %}
+
+{% block content %}
+<h2>Anteprima Fatture per {{ mese }}</h2>
+<p>Clienti elaborati: {{ total_clienti }}</p>
+
+{% for fattura in riepilogo %}
+<h3>{{ fattura.cliente }}</h3>
+<div class="d-flex justify-content-md-end justify-content-between gap-2 w-100">
+
+
+    {% if fattura.errori %}
+    <div class="alert alert-danger">
+        <h4>Errori:</h4>
+        <ul>
+            {% for errore in fattura.errori %}
+            <li>{{ errore }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    <table class="table table-hover table-sm">
+        <thead>
+            <tr>
+                <th>Codice</th>
+                <th>Prezzo</th>
+                <th>Quantità</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for codice, dati in fattura.righe.items %}
+            <tr>
+                <td>{{ codice }}</td>
+                <td>{{ dati.prezzo|floatformat:2 }}€</td>
+                <td>{{ dati.quantita }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endfor %}
+
+<form method="post" action="{% url 'conferma-fatture'%}">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-success">Conferma e Salva</button>
+</form>
+
+{% endblock %}

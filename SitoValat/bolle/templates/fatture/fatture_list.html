@@ -9,14 +9,41 @@
     <a href="{% url 'fattura-create' %}" class="btn btn-lg btn-gradient text-white"><i class="bi bi-file-earmark-plus"></i> Nuova</a></h1>
 </div>
 {% if messages %}
-<div class="row">
-    <div col="col-md-3">
-        {% for message in messages %}
-            <div class="alert alert-danger">{{ message }}</div>
-        {% endfor %}
-    </div>
-</div>
+    {% for message in messages %}
+        {% if message.tags == 'error' %}
+            <div class="alert alert-danger mt-3">
+                <p>{{ message }}</p>
+            </div>
+        {% elif message.tags == 'success' %}
+            <div class="alert alert-success mt-3">
+                <p>{{ message }}</p>
+            </div>
+        {% endif %}
+    {% endfor %}
 {% endif %}
+
+<form method="get" action="{% url 'auto-fatture'%}">
+    <label for="mese" class="h4">Creazione automatica fatture:</label>
+    <div class="d-flex justify-content-md-end justify-content-between gap-2 w-100 mb-3">
+        <select name="mese" id="mese" class="form-select">
+            <option value="" selected>Seleziona un mese...</option>
+            {% for mese, valore in mesi.items %}
+                <option value="{{ valore }}">
+                    {{ mese }}
+                </option>
+            {% endfor %}
+        </select>
+        <select name="anno" id="anno" class="form-select">
+            <option value="" selected>Seleziona anno...</option>
+            {% for anno in anni %}
+                <option value="{{ anno }}">
+                    {{ anno }}
+                </option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-dark w-50"><i class="bi bi-gear"></i> Crea Fatture</button>
+    </div>
+</form>
 
 <!-- Form per i filtri -->
 <form method="get" class="mb-4">
