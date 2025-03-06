@@ -1551,7 +1551,7 @@ def scarica_tutte_fatture_pdf(request):
         c.showPage() # Aggiungi una nuova pagina per ogni fattura
 
     # Salva il PDF
-    c.setTitle(f"Insieme di fatture del {fattura.data.strftime("%d/%m/%y")}")
+    c.setTitle(f"Insieme di fatture del {fattura.data.strftime('%d/%m/%y')}")
     c.save()
 
     buffer.seek(0) #risali all'inizio
