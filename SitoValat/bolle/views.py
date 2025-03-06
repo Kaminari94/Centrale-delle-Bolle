@@ -2364,9 +2364,7 @@ class ConfermaFattureView(View):
 
         with transaction.atomic():  # Garantisce che tutto vada a buon fine o si annulli
             riepilogo = request.session.get('riepilogo', [])  # Recupera il riepilogo dalla sessione
-            if not riepilogo:
-                messages.error(request, f"Non ci sono articoli ordinati da nessunc cliente per il mese di {_date(data_fine, 'F Y')}")
-                return redirect('fatture-list')
+
             data_fine_str = request.session.get('data_fine')
             data_fine = datetime.strptime(data_fine_str, '%Y-%m-%d')
             anno = data_fine.year
@@ -2376,6 +2374,9 @@ class ConfermaFattureView(View):
             tipo_NTV = TipoDocumento.objects.filter(concessionario = conc, nome="NTV").first()
             tipo_NT = TipoDocumento.objects.filter(concessionario = conc, nome="NT").first()
             numero = tipo_fattura.ultimo_numero
+            if not riepilogo:
+                messages.error(request, f"Non ci sono articoli ordinati da nessun cliente per il mese di {_date(data_fine, 'F Y')}")
+                return redirect('fatture-list')
             for fattura_data in riepilogo:
                 cliente = get_object_or_404(Cliente, pk=fattura_data['id_cliente'])
                 # Crea la fattura
