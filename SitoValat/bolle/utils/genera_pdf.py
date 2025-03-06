@@ -91,7 +91,7 @@ def genera_pdf_base64(fattura):
         # Intestaziona tabella con i prodotti
         c.setFont("Helvetica-Bold", 12)
         c.drawString(50, altezza - 250, "Codice")
-        c.drawString(100, altezza - 250, "Descrizione")
+        c.drawString(110, altezza - 250, "Descrizione")
         c.drawString(260, altezza - 250, "IVA")
         c.drawString(300, altezza - 250, "Quantità")
         c.drawString(400, altezza - 250, "Prezzo")
@@ -118,7 +118,7 @@ def genera_pdf_base64(fattura):
         c.setFont("Helvetica", 10)
         c.setLineWidth(1)  # Imposta spessore linea cliente
         c.drawString(50, y, riga.articolo.nome)
-        c.drawString(100, y, riga.articolo.descrizione)
+        c.drawString(110, y, riga.articolo.descrizione)
         c.drawString(260, y, str(riga.iva)+"%")
         c.drawRightString(350, y, str(riga.quantita))
         c.drawRightString(440, y, "€ {:.3f}".format(riga.prezzo))
