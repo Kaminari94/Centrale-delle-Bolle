@@ -283,21 +283,32 @@ class Fattura(models.Model):
     def aggiorna_totali(self):
         # Reset dei totali
         nuovi_totali = {
-            "4": {"imp": 0.0, "iva": 0.0, "tot": 0.0},
-            "10": {"imp": 0.0, "iva": 0.0, "tot": 0.0},
-            "22": {"imp": 0.0, "iva": 0.0, "tot": 0.0},
-            "tot": 0.0,
+            "4": {"imp": Decimal('0'), "iva": Decimal('0'), "tot": Decimal('0')},
+            "10": {"imp": Decimal('0'), "iva": Decimal('0'), "tot": Decimal('0')},
+            "22": {"imp": Decimal('0'), "iva": Decimal('0'), "tot": Decimal('0')},
+            "tot": Decimal('0'),
         }
         rigafattura = RigaFattura.objects.filter(fattura=self)
         # Itera su tutte le righe della fattura
         for riga in rigafattura.all():
             aliquota = str(riga.iva)  # '4', '10', '22'
-            nuovi_totali[aliquota]["imp"] += float(riga.imp)
-            nuovi_totali[aliquota]["iva"] += float(riga.tot_iva)
-            nuovi_totali[aliquota]["tot"] += float(riga.imp) + float(riga.tot_iva)
+            nuovi_totali[aliquota]["imp"] += riga.imp
+            nuovi_totali[aliquota]["iva"] += riga.tot_iva
+            nuovi_totali[aliquota]["tot"] += riga.imp + riga.tot_iva
 
         nuovi_totali["tot"] = nuovi_totali["4"]["tot"] + nuovi_totali["10"]["tot"] + nuovi_totali["22"]["tot"]
+        nuovi_totali["tot"] = nuovi_totali["tot"].quantize(Decimal('0.01'), ROUND_HALF_UP)
+
+        for aliq in ["4", "10", "22"]:
+            imp = nuovi_totali[aliq]["imp"].quantize(Decimal('0.01'), ROUND_HALF_UP)
+            iva = nuovi_totali[aliq]["iva"].quantize(Decimal('0.01'), ROUND_HALF_UP)
+            tot = (imp + iva).quantize(Decimal('0.01'), ROUND_HALF_UP)
+
+            nuovi_totali[aliq]["imp"] = float(imp)
+            nuovi_totali[aliq]["iva"] = float(iva)
+            nuovi_totali[aliq]["tot"] = float(tot)
         # Aggiorna il campo totali
+        nuovi_totali["tot"] = float(nuovi_totali["tot"])
         self.totali = nuovi_totali
         self.save()  # Salva la fattura con i nuovi totali
 
@@ -334,17 +345,12 @@ class RigaFattura(models.Model):
 
     def save(self, *args, **kwargs):
         with transaction.atomic():
-            from .utils.genera_fattura import genera_fattura_xml
             if not self.prezzo:
                 self.prezzo = self.articolo.prezzo
-            self.imp = (Decimal(self.prezzo) * Decimal(self.quantita))
-            bias_imp = self.imp + Decimal('0.0000001')
-            # DEBUG print(bias_imp)
+            bias_imp = self.prezzo * Decimal(self.quantita)
             self.imp = bias_imp.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            self.tot_iva = Decimal(Decimal(self.imp) * (Decimal(self.iva) / 100))
-            bias_iva = self.tot_iva + Decimal('0.0001')
-            # DEBUG print(bias_iva)
-            self.tot_iva = bias_iva.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            iva_calcolata = self.imp * (Decimal(self.iva) / 100)
+            self.tot_iva = iva_calcolata.quantize(Decimal('0.001'), rounding = ROUND_HALF_UP)
         super().save(*args, **kwargs)
 
     def __str__(self):
