@@ -2516,6 +2516,7 @@ def report_avanzato(request):
     df_articoli['giorno_settimana'] = df_articoli['giorno_settimana'].map(giorni_ita)
     df_heat['giorno_settimana'] = df_heat['giorno_settimana'].map(giorni_ita)
     df_heatmap = df_heat.groupby(['articolo', 'giorno_settimana']).agg({"quantita":"sum"}).reset_index()
+
     df_raggrup = df_articoli.groupby(['articolo', 'giorno_settimana']).agg({'quantita':'sum'}).reset_index()
     ordine_giorni = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica']
     df_raggrup['giorno_settimana'] = pd.Categorical(df_raggrup['giorno_settimana'], categories=ordine_giorni, ordered=True)
@@ -2527,7 +2528,7 @@ def report_avanzato(request):
 
     graf_giorni = px.bar(df_raggrup, x='giorno_settimana', y='quantita', color='articolo', barmode='group', labels={'articolo':"Articolo", 'giorno_settimana':"Giorno della Settimana", 'quantita':"Quantità"})
     pivot_table = df_heatmap.pivot_table(index='giorno_settimana', columns='articolo', values='quantita', aggfunc='sum')
-    heat = px.imshow(pivot_table, labels=dict(x="Articolo", y="Data", color="Quantità"))
+    heat = px.imshow(pivot_table, labels=dict(x="Articolo", y="Giorno", color="Quantità"))
     bar_html = bar.to_html(full_html=False)
     heat_html = heat.to_html(full_html=False)
     giorni_html = graf_giorni.to_html(full_html=False)
