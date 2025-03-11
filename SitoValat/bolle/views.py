@@ -2500,8 +2500,8 @@ def report_avanzato(request):
     bar = px.bar(dataframe, x="articolo", y="quantita", labels={'articolo':"Articolo", 'quantita':"Quantità"}) #Quantità per articolo
 
 
-    df_articoli = dataframe[dataframe['articolo'].str.contains('600125|600127|600171|600026', na=False)]
-    df_heat = dataframe[~dataframe['articolo'].str.contains('600125|600127|600171|600026', na=False)]
+    df_articoli = dataframe[dataframe['articolo'].str.contains('600125|600127|600171|600026|600111|600112', na=False)]
+    df_heat = dataframe[~dataframe['articolo'].str.contains('600125|600127|600171|600026|600111|600112', na=False)]
     df_heat['giorno_settimana'] = df_heat['bolla__data'].dt.day_name()
     df_articoli['giorno_settimana'] = df_articoli['bolla__data'].dt.day_name()
     giorni_ita = {
