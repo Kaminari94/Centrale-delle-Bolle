@@ -2430,6 +2430,105 @@ class ConfermaFattureView(View):
             messages.success(request, f"Create {num} fatture per {_date(data_fine, 'F Y')}")
             return redirect('fatture-list')
 
-       # except Exception as e:
-       #     messages.error(request, f"Errore durante la creazione delle fatture: {str(e)}")
-       #     return redirect('auto-fatture')
+import pandas as pd
+import plotly.express as px
+import django_pandas.io as dp
+
+def report_avanzato(request):
+    data_inizio = request.GET.get("data_inizio")
+    data_fine = request.GET.get("data_fine")
+    cliente_id = request.GET.get("cliente_id")
+    user = request.user
+
+    if hasattr(user, 'zona'):
+        # Se l'utente ha una zona, mostra solo quella
+        zona = Zona.objects.filter(pk=user.zona.pk)
+        concessionario = zona.first().concessionario
+    elif hasattr(user, 'concessionario'):
+        concessionario = user.concessionario
+    else:
+        concessionario = None
+
+    tipi_doc = TipoDocumento.objects.filter(concessionario=concessionario).exclude(nome__in=["RF"])
+    clienti = Cliente.objects.filter(tipo_documento_predefinito__in=tipi_doc).order_by("tipo_documento_predefinito")
+
+    if not data_inizio or not data_fine or not cliente_id:
+        return render(request, 'riepiloghi/report.html', {'clienti': clienti})
+
+    #if not data_inizio or not data_fine or not cliente_id:
+    #    messages.error(request, "Inserire tutti i parametri.")
+    #    return redirect('report-avanzato')
+
+    # Converti le date
+    data_inizio = datetime.strptime(data_inizio, "%Y-%m-%d")
+    data_fine = datetime.strptime(data_fine, "%Y-%m-%d")
+    data_inizio = timezone.make_aware(data_inizio, timezone.get_current_timezone())
+    data_fine = timezone.make_aware(data_fine, timezone.get_current_timezone())
+    data_fine = data_fine.replace(hour=23, minute=59, second=59, microsecond=999999)
+    cliente = get_object_or_404(Cliente, pk=cliente_id)
+    tipo_ntv = TipoDocumento.objects.filter(nome="NTV", concessionario=concessionario).first()
+    if cliente.tipo_documento_predefinito == tipo_ntv:
+        bolle_cliente = SchedaTV.objects.filter(
+            cliente=cliente,
+            data__range=(data_inizio, data_fine)
+        )
+        dati = RigaSchedaTV.objects.filter(scheda__in=bolle_cliente).select_related('scheda').values(
+            'id',
+            'quantita',
+            'giorno',
+            'scheda__data',
+            'articolo',
+        )
+    else:
+        bolle_cliente = Bolla.objects.filter(data__range=(data_inizio, data_fine), cliente=cliente)
+        dati = RigaBolla.objects.filter(bolla__in=bolle_cliente).select_related('bolla').values(
+        'id',  # Campo di RigaBolla
+        'quantita',  # Campo di RigaBolla
+        'lotto',  # Campo di RigaBolla
+        'bolla__data',  # Campo di Bolla (data)
+        'bolla__numero',  # Campo di Bolla (numero)
+        'articolo'
+        )
+
+    dataframe = dp.read_frame(dati)
+    if cliente.tipo_documento_predefinito == tipo_ntv:
+        # Combina il giorno di RigaSchedaTV con la data di SchedaTV
+        dataframe['bolla__data'] = dataframe.apply(
+            lambda row: pd.to_datetime(f"{row['scheda__data'].year}-{row['scheda__data'].month}-{row['giorno']}"),
+            axis=1
+        )
+    bar = px.bar(dataframe, x="articolo", y="quantita", labels={'articolo':"Articolo", 'quantita':"Quantità"}) #Quantità per articolo
+    pivot_table = dataframe.pivot_table(index='bolla__data', columns='articolo', values='quantita', aggfunc='sum')
+    heat = px.imshow(pivot_table, labels=dict(x="Articolo", y="Data", color="Quantità"))
+
+    df_articoli = dataframe[dataframe['articolo'].str.contains('600125|600127|600171|600026', na=False)]
+
+    df_articoli['giorno_settimana'] = df_articoli['bolla__data'].dt.day_name()
+    giorni_ita = {
+        'Monday':'Lunedì',
+        'Tuesday':'Martedì',
+        'Wednesday':'Mercoledì',
+        'Thursday':'Giovedì',
+        'Friday':'Venerdì',
+        'Saturday':'Sabato',
+        'Sunday':'Domenica'
+    }
+    df_articoli['giorno_settimana'] = df_articoli['giorno_settimana'].map(giorni_ita)
+    df_raggrup = df_articoli.groupby(['articolo', 'giorno_settimana']).agg({'quantita':'sum'}).reset_index()
+    ordine_giorni = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica']
+    df_raggrup['giorno_settimana'] = pd.Categorical(df_raggrup['giorno_settimana'], categories=ordine_giorni, ordered=True)
+    df_raggrup = df_raggrup.sort_values('giorno_settimana')
+    graf_giorni = px.bar(df_raggrup, x='giorno_settimana', y='quantita', color='articolo', barmode='group', labels={'articolo':"Articolo", 'giorno_settimana':"Giorno della Settimana", 'quantita':"Quantità"})
+    bar_html = bar.to_html(full_html=False)
+    heat_html = heat.to_html(full_html=False)
+    giorni_html = graf_giorni.to_html(full_html=False)
+    context ={
+        'clienti': clienti,
+        'cliente': cliente,
+        'bar_html': bar_html,
+        'heat_html': heat_html,
+        'giorni_html': giorni_html,
+        'data_inizio': data_inizio.date(),
+        'data_fine': data_fine.date()
+    }
+    return render(request, 'riepiloghi/report.html', context)

@@ -55,4 +55,5 @@ urlpatterns = [
     path('schedetv/crea-schede/', CreaSchedeTV.as_view(), name='crea-schede'),
     path('fatture/scarica-tutte/', scarica_tutte_xml, name='scarica-tutte'),
     path('fatture/scarica-tutte-pdf/', scarica_tutte_fatture_pdf, name='scarica-tutte-pdf'),
+    path('riepiloghi/avanzato/', report_avanzato, name='report-avanzato'),
 ]
