@@ -1,0 +1,126 @@
+{% extends 'bolle/homepage.html' %}
+
+{% block title %}Menu Riepiloghi{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap mb-3">
+    <h1>Vendite medie per articolo e previsioni</h1>
+</div>
+{% if messages %}
+    {% for message in messages %}
+        {% if message.tags == 'error' %}
+            <div class="alert alert-danger mt-3">
+                <p>{{ message }}</p>
+            </div>
+        {% elif message.tags == 'success' %}
+            <div class="alert alert-success mt-3">
+                <p>{{ message }}</p>
+            </div>
+        {% endif %}
+    {% endfor %}
+{% endif %}
+
+<form method="get">
+    <div class="d-flex justify-content-md-end justify-content-between gap-2 w-100 mb-3">
+
+        <button type="submit" class="btn btn-dark w-50"><i class="bi bi-gear"></i> Genera Report</button>
+    </div>
+
+    <!-- Form per i filtri -->
+
+    <div class="d-flex justify-content-md-end justify-content-between gap-2 w-100 mb-3">
+    <!-- Filtro Data Inizio -->
+        <label for="data_inizio" class="form-label">Inizio:</label>
+        <input type="date" id="data_inizio" name="data_inizio" class="form-control" value="{{ data_inizio|default:''|date:'Y-m-d' }}">
+    <!-- Filtro Data Fine -->
+        <label for="data_fine" class="form-label">Fine:</label>
+        <input type="date" id="data_fine" name="data_fine" class="form-control" value="{{ data_fine|default:''|date:'Y-m-d' }}">
+
+    <!-- Pulsanti -->
+        <div class="col-md-3 col-12 d-flex flex-column gap-2">
+            <div class="d-flex justify-content-md-end justify-content-between gap-1 w-100">
+            <a class="btn btn-sm btn-dark w-100 justify-content-center" id="setOggi">Oggi</a>
+            <a class="btn btn-sm btn-dark w-100" id="setSettimana">Settimana</a>
+            <a class="btn btn-sm btn-dark w-100" id="setMese">Mese</a>
+            </div>
+        </div>
+    </div>
+</form>
+{% if bar_media_html %}
+<hr class="bg-dark border-2 border-top border-dark" />
+<!---  Main render del report  --->
+
+<div class="card mb-3">
+    <div class="card-header">
+        <span style="float: left;">Vendite medie per articolo e giorno</span>
+        <span style="float: right;">da: {{data_inizio}} a {{data_fine}}</span>
+    </div>
+    <div class="card-body">
+        {{ bar_media_html|safe }}
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">
+        <span style="float: left;">Heatmap (Data vs Articolo)</span>
+        <span style="float: right;">da: {{data_inizio}} a {{data_fine}}</span>
+    </div>
+    <div class="card-body">
+        {{ heatmap_html|safe }}
+    </div>
+</div>
+<div class="card mb-3">
+    <div class="card-header">
+        <span style="float: left;">Line Chart Temporale</span>
+        <span style="float: right;">da: {{data_inizio}} a {{data_fine}}</span>
+    </div>
+    <div class="card-body">
+        {{ line_html|safe }}
+    </div>
+</div>
+<div class="card mb-3">
+    <div class="card-header">
+        <span style="float: left;">Grafico a Torta per Distribuzione</span>
+        <span style="float: right;">da: {{data_inizio}} a {{data_fine}}</span>
+    </div>
+    <div class="card-body">
+        {{ torta_html|safe }}
+    </div>
+</div>
+{% endif %}
+
+<!-- Script per bottoni selezione rapida data -->
+<script>
+    function formatDate(date) {
+        return date.toISOString().split('T')[0]; // Converte in YYYY-MM-DD per input date
+    }
+
+    // Imposta la data di oggi
+    document.getElementById("setOggi").addEventListener("click", function() {
+        let oggi = new Date();
+        document.getElementById("data_inizio").value = formatDate(oggi);
+        document.getElementById("data_fine").value = formatDate(oggi);
+    });
+
+    // Imposta la settimana corrente (Lunedì - Domenica)
+    document.getElementById("setSettimana").addEventListener("click", function() {
+        let oggi = new Date();
+        let primoGiornoSettimana = new Date(oggi.setDate(oggi.getDate() - oggi.getDay())); // Domenica
+        let ultimoGiornoSettimana = new Date(oggi.setDate(primoGiornoSettimana.getDate() + 7)); // Domenica
+
+        document.getElementById("data_inizio").value = formatDate(primoGiornoSettimana);
+        document.getElementById("data_fine").value = formatDate(ultimoGiornoSettimana);
+    });
+
+    // Imposta il mese corrente (1° giorno - Ultimo giorno)
+    document.getElementById("setMese").addEventListener("click", function() {
+        let oggi = new Date();
+        let primoGiorno = new Date(oggi.getFullYear(), oggi.getMonth(), 2);
+        let ultimoGiorno = new Date(oggi.getFullYear(), oggi.getMonth() + 1, 1);
+
+        document.getElementById("data_inizio").value = formatDate(primoGiorno);
+        document.getElementById("data_fine").value = formatDate(ultimoGiorno);
+    });
+
+</script>
+{% endblock %}

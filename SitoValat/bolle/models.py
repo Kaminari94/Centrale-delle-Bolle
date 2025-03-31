@@ -67,6 +67,10 @@ class Categoria(models.Model):
 from django.db import models
 
 class Cliente(models.Model):
+    IGNORA = [
+        (True, 'Ignora'),
+        (False, 'Non Ignorare'),
+    ]
     nome = models.CharField(max_length=255)
     concessionario = models.ForeignKey('Concessionario', on_delete=models.CASCADE)  # Concessionario
     indirizzo = models.TextField(null=True, blank=True)
@@ -87,6 +91,7 @@ class Cliente(models.Model):
     proprietario = models.ForeignKey('Proprietario', on_delete=models.SET_NULL, null=True, blank=True, related_name='clienti')
     codice = models.CharField(max_length=30, default="0000")
     zona = models.ForeignKey('Zona', on_delete=models.CASCADE, related_name='clienti', default="", null=True, blank=True)
+    ignorare = models.BooleanField(default=False, choices=IGNORA)
     def __str__(self):
         return f"{self.tipo_documento_predefinito} | {self.nome} - {self.via}"
 

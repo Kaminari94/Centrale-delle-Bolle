@@ -2223,13 +2223,13 @@ class CreaSchedeTV(View):
             conc = Concessionario.objects.none()
 
         tipo_doc = TipoDocumento.objects.filter(nome="NTV", concessionario=conc).first()
-        print(str(mese))
+        #print(str(mese))
         # Recupera data di oggi e aggiungici un mese
         data_inizio = timezone.now().replace(day=1, month=mese)
         # data_inizio = data_inizio + relativedelta(months=1)
-        print("Oggi: ", timezone.now(), " Prossimo mese: ", data_inizio)
+        #print("Oggi: ", timezone.now(), " Prossimo mese: ", data_inizio)
 
-        clienti = Cliente.objects.filter(concessionario = conc, tipo_documento_predefinito = tipo_doc).order_by("nome")
+        clienti = Cliente.objects.filter(concessionario = conc, tipo_documento_predefinito = tipo_doc, ignorare = False).order_by("nome")
         numero = 0
         try:
             for cliente in clienti:
@@ -2542,3 +2542,155 @@ def report_avanzato(request):
         'data_fine': data_fine.date()
     }
     return render(request, 'riepiloghi/report.html', context)
+
+import itertools
+
+def previsione_carico(request):
+    data_inizio = request.GET.get("data_inizio")
+    data_fine = request.GET.get("data_fine")
+    user = request.user
+
+    if hasattr(user, 'zona'):
+        # Se l'utente ha una zona, mostra solo quella
+        zona = Zona.objects.filter(pk=user.zona.pk)
+        concessionario = zona.first().concessionario
+    elif hasattr(user, 'concessionario'):
+        concessionario = user.concessionario
+        zona = Zona.objects.filter(concessionario = concessionario).first()
+    else:
+        concessionario = None
+
+    if not data_inizio or not data_fine:
+        return render(request, 'riepiloghi/previsioni.html')
+
+    giorni = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica']
+
+    # Converti le date
+    data_inizio = datetime.strptime(data_inizio, "%Y-%m-%d")
+    data_fine = datetime.strptime(data_fine, "%Y-%m-%d")
+
+    data_inizio = timezone.make_aware(data_inizio, timezone.get_current_timezone())
+    data_fine = timezone.make_aware(data_fine, timezone.get_current_timezone())
+
+    data_fine = data_fine.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+    carichi = Carico.objects.filter(data__range=(data_inizio, data_fine), zona = zona)
+    resi = Reso.objects.filter(data__range=(data_inizio, data_fine), zona = zona)
+
+    dati_carico = RigaCarico.objects.filter(carico__in=carichi).select_related('carico').values(
+        'id',
+        'carico__data',
+        'articolo',
+        'quantita',
+    )
+    dati_reso = RigaReso.objects.filter(reso__in=resi).select_related('reso').values(
+        'id',
+        'reso__data',
+        'articolo',
+        'quantita',
+    )
+    giorni_ita = {
+        'Monday':'Lunedì',
+        'Tuesday':'Martedì',
+        'Wednesday':'Mercoledì',
+        'Thursday':'Giovedì',
+        'Friday':'Venerdì',
+        'Saturday':'Sabato',
+        'Sunday':'Domenica'
+    }
+
+    df_carico = dp.read_frame(dati_carico)
+    df_reso = dp.read_frame(dati_reso)
+    df_carico['carico__data'] = pd.to_datetime(df_carico['carico__data'], format='%Y-%m-%d')
+    df_reso['reso__data'] = pd.to_datetime(df_reso['reso__data'], format='%Y-%m-%d')
+    df_carico['giorno_settimana'] = df_carico['carico__data'].dt.day_name()
+
+    df_reso['giorno_settimana'] = df_reso['reso__data'].dt.day_name()
+    df_reso['giorno_settimana'] = df_reso['giorno_settimana'].map(giorni_ita)
+    df_reso['giorno_successivo'] = df_reso['reso__data'] + pd.DateOffset(days=1)
+    df_reso['giorno_successivo'] = df_reso['giorno_successivo'].dt.day_name().map(giorni_ita)
+    df_carico['giorno_successivo'] = df_carico['carico__data'] + pd.DateOffset(days=1)
+    df_carico['giorno_successivo'] = df_carico['giorno_successivo'].dt.day_name().map(giorni_ita)
+    df_reso['giorno_settimana'] = df_reso['giorno_successivo']
+    df_carico['giorno_settimana'] = df_carico['giorno_successivo']
+    articoli = list(df_carico['articolo'].unique()) if not df_carico.empty else []
+    combinazioni = list(itertools.product(articoli, giorni))
+    df_completo = pd.DataFrame(combinazioni, columns=['articolo', 'giorno_settimana'])
+
+    df_carico = df_carico.groupby(['articolo', 'giorno_settimana']).agg({"quantita":"mean"}).reset_index()
+    df_reso = df_reso.groupby(['articolo', 'giorno_settimana']).agg({"quantita":"mean"}).reset_index()
+    df_storico = pd.merge(
+        df_completo,
+        pd.merge(
+            df_carico,
+            df_reso,
+            on=['articolo', 'giorno_settimana'],
+            suffixes=('_carico', '_reso'),
+            how='left'
+        ),
+        how='left'
+    ).fillna(0)
+
+    df_storico['vendite'] = df_storico['quantita_carico'] - df_storico['quantita_reso']
+    df_storico = df_storico[df_storico['vendite'] > 0]
+    df_media = df_storico.groupby(['articolo', 'giorno_settimana']).agg({"vendite":"median"}).reset_index()
+    ordine_giorni = ['Lunedì', 'Martedì', 'Mercoledì', 'Venerdì', 'Sabato', 'Domenica']
+    df_media['giorno_settimana'] = pd.Categorical(df_media['giorno_settimana'], categories=ordine_giorni, ordered=True)
+    df_media = df_media.sort_values('giorno_settimana')
+    df_media = df_media[~df_media["articolo"].str.contains("0234|6032|027110|600075/V|6035|020910", na=False)]
+
+    #codice per i grafici
+
+    bar_media = px.bar(
+        df_media[df_media['vendite'] != 0],
+        x='giorno_settimana',
+        y='vendite',
+        color='articolo',
+        barmode='group',
+        title='Vendite Medie per Articolo e Giorno',
+        labels={'vendite': 'Vendite Medie', 'giorno_settimana': 'Giorno della Settimana'}
+    ).update_xaxes(categoryorder='array', categoryarray=ordine_giorni)
+    bar_media_html = bar_media.to_html()
+
+    heatmap = px.density_heatmap(
+        df_media[df_media['vendite'] != 0],
+        x='giorno_settimana',
+        y='articolo',
+        z='vendite',
+        title='Heatmap Vendite Medie per Giorno Settimana',
+        labels = {'vendite': 'Vendite Medie', 'giorno_settimana': 'Giorno della Settimana', 'articolo':'Articolo'}
+    ).update_xaxes(categoryorder='array', categoryarray=ordine_giorni).update_layout(coloraxis_colorbar_title='Somma delle Vendite')
+    heatmap.update_traces(
+        hovertemplate="Articolo: %{y}<br>Giorno: %{x}<br>Vendite: %{z}"
+    )
+    heatmap_html = heatmap.to_html()
+    line = px.line(
+        df_media,
+        x='giorno_settimana',
+        y='vendite',
+        color='articolo',
+        markers=True,
+        title="Andamento Settimanale delle Vendite",
+        labels={'vendite': 'Vendite Medie', 'giorno_settimana': 'Giorno'}
+    ).update_xaxes(categoryorder='array', categoryarray=ordine_giorni)
+    line_html = line.to_html()
+    torta = px.pie(
+        df_media.groupby('articolo')['vendite'].sum().reset_index(),
+        names='articolo',
+        values='vendite',
+        title='Distribuzione Percentuale delle Vendite per Articolo',
+        labels={'vendite':"Vendite"}
+    ).update_traces(textinfo='none',
+                    hovertemplate='<b>%{label}</b><br>Quantità: %{value}<extra></extra>'
+                    )
+    torta_html = torta.to_html()
+
+    context = {
+        'bar_media_html': bar_media_html,
+        'heatmap_html': heatmap_html,
+        'line_html': line_html,
+        'torta_html': torta_html,
+        'data_inizio': data_inizio.date(),
+        'data_fine': data_fine.date()
+    }
+    return render(request, 'riepiloghi/previsioni.html', context)

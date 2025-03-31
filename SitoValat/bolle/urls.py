@@ -56,4 +56,5 @@ urlpatterns = [
     path('fatture/scarica-tutte/', scarica_tutte_xml, name='scarica-tutte'),
     path('fatture/scarica-tutte-pdf/', scarica_tutte_fatture_pdf, name='scarica-tutte-pdf'),
     path('riepiloghi/avanzato/', report_avanzato, name='report-avanzato'),
+    path('riepiloghi/previsioni/', previsione_carico, name='previsione-carico'),
 ]
