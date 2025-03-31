@@ -2279,8 +2279,8 @@ class CreaFattureAuto(LoginRequiredMixin, View):
 
         tipo_doc = TipoDocumento.objects.filter(concessionario=conc)
         # Recupera data di oggi e aggiungici un mese
-        data_inizio = timezone.now().replace(day=1, month=mese, year=anno)
-        data_fine = timezone.now().replace(day=1, month=mese, year=anno) + relativedelta(months=1) - relativedelta(days=1)
+        data_inizio = timezone.now().replace(day=1, month=mese, year=anno, hour=0, minute=0)
+        data_fine = timezone.now().replace(day=1, month=mese, year=anno, hour=23, minute=59) + relativedelta(months=1) - relativedelta(days=1)
         print("Oggi: ", data_inizio, " Ultimo giorno mese precedente: ", data_fine)
         clienti = Cliente.objects.filter(concessionario = conc, tipo_documento_predefinito__in=tipo_doc).order_by("nome")
         numero = 0
