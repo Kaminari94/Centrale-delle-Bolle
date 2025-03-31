@@ -2417,7 +2417,7 @@ class ConfermaFattureView(View):
                         fattura=fattura,
                         articolo_id=articolo.pk,
                         quantita=riga_data['quantita'],
-                        prezzo=riga_data['prezzo'],
+                        prezzo=Decimal(riga_data['prezzo']),
                         iva = articolo.iva,
                     )
 
