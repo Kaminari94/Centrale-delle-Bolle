@@ -1798,7 +1798,7 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
             RigaFattura.objects.create(
                 fattura = self.get_object(),
                 articolo_id = articolo_id,
-                prezzo = prezzo,
+                prezzo = Decimal(prezzo),
                 quantita = quantita,
                 iva = iva,
             )
@@ -1874,7 +1874,7 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
                     fattura=self.get_object(),
                     articolo=riga["articolo"],
                     quantita=riga["quantita"],
-                    prezzo=prezzo,
+                    prezzo=Decimal(prezzo),
                     iva= iva,
                 )
                 articoli += 1
