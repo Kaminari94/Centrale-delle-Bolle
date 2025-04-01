@@ -119,6 +119,11 @@ def genera_pdf_base64(fattura):
         c.setLineWidth(1)  # Imposta spessore linea cliente
         c.drawString(50, y, riga.articolo.nome)
         c.drawString(110, y, riga.articolo.descrizione)
+        if riga.articolo.categoria.nome == "Diciture":
+            c.line(50, y - 2, 550, y - 2)  # Linea per cliente
+            y -= 11
+            riga_counter += 1
+            continue
         c.drawString(260, y, str(riga.iva)+"%")
         c.drawRightString(350, y, str(riga.quantita))
         c.drawRightString(440, y, "€ {:.3f}".format(riga.prezzo))
