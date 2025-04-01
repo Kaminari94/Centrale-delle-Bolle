@@ -1787,14 +1787,18 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
                     f"{reverse('fattura-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
             tipo_rf = TipoDocumento.objects.filter(nome="RF", concessionario=concessionario).first()
             articolo = get_object_or_404(Articolo, pk=articolo_id)
+            if not prezzo:
+                prezzo = articolo.prezzo
             iva = articolo.iva
             prezzo_pers = PrezziPersonalizzati.objects.filter(articolo=articolo, cliente=cliente).first()
             if prezzo_pers:
-                prezzo = float(prezzo_pers.prezzo)
+                prezzo = prezzo_pers.prezzo
             if cliente.tipo_documento_predefinito == tipo_rf:
                 articolo = get_object_or_404(Articolo, pk=articolo_id)
                 prezzo = articolo.prezzo_tr
                 iva = 22
+            print(type(prezzo))
+            print(prezzo)
             RigaFattura.objects.create(
                 fattura = self.get_object(),
                 articolo_id = articolo_id,
@@ -1870,11 +1874,13 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
                     iva = 22
                 else:
                     prezzo = articolo.prezzo
+                if type(prezzo) != Decimal:
+                    prezzo = Decimal(prezzo)
                 RigaFattura.objects.create(
                     fattura=self.get_object(),
                     articolo=riga["articolo"],
                     quantita=riga["quantita"],
-                    prezzo=Decimal(prezzo),
+                    prezzo=prezzo,
                     iva= iva,
                 )
                 articoli += 1
