@@ -39,7 +39,7 @@
                     <td>{{ riga.prezzo }} €</td>
                     <td>{{ riga.quantita }}</td>
                     <td>{{ riga.get_iva_display }}</td>
-                    <td>{{ riga.imp|floatformat:2 }} €</td>
+                    <td>{{ riga.imp|floatformat:3 }} €</td>
                 </tr>
             {% empty %}
                 <tr>
@@ -55,19 +55,19 @@
     <table class="table table-sm table-bordered table-responsive">
         <tr>
             <td><strong>Imponibile 4%:</strong></td>
-            <td>€ {{ fattura.totali.4.imp|default:"0.00"|floatformat:2 }}</td>
+            <td>€ {{ fattura.totali.4.imp|default:"0.00"|floatformat:3 }}</td>
             <td><strong>Imponibile 10%:</strong></td>
-            <td>€ {{ fattura.totali.10.imp|default:"0.00"|floatformat:2 }}</td>
+            <td>€ {{ fattura.totali.10.imp|default:"0.00"|floatformat:3 }}</td>
             <td><strong>Imponibile 22%:</strong></td>
-            <td>€ {{ fattura.totali.22.imp|default:"0.00"|floatformat:2 }}</td>
+            <td>€ {{ fattura.totali.22.imp|default:"0.00"|floatformat:3 }}</td>
         </tr>
         <tr>
             <td><strong>IVA 4%:</strong></td>
-            <td>€ {{ fattura.totali.4.iva|default:"0.00"|floatformat:2 }}</td>
+            <td>€ {{ fattura.totali.4.iva|default:"0.00"|floatformat:3 }}</td>
             <td><strong>IVA 10%:</strong></td>
-            <td>€ {{ fattura.totali.10.iva|default:"0.00"|floatformat:2 }}</td>
+            <td>€ {{ fattura.totali.10.iva|default:"0.00"|floatformat:3 }}</td>
             <td><strong>IVA 22%:</strong></td>
-            <td>€ {{ fattura.totali.22.iva|default:"0.00"|floatformat:2 }}</td>
+            <td>€ {{ fattura.totali.22.iva|default:"0.00"|floatformat:3 }}</td>
         </tr>
         <tr>
 

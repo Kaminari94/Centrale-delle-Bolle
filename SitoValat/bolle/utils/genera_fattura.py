@@ -89,6 +89,8 @@ def genera_fattura_xml(fattura):
     xml.addQuickElement("Data", fattura.data.strftime('%Y-%m-%d'))
     xml.addQuickElement("Numero", fattura.numero)
     xml.addQuickElement("ImportoTotaleDocumento", str(format(fattura.totali["tot"], ".2f"))) # Importo Totale Documento
+    #if fattura.totali["arr"] != 0:
+    #    xml.addQuickElement("Arrotondamento", str(fattura.totali["arr"]))
     xml.endElement("DatiGeneraliDocumento")
     xml.endElement("DatiGenerali")
 

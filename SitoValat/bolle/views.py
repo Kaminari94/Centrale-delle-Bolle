@@ -1627,12 +1627,12 @@ def disegna_fattura(c, fattura):
         c.drawString(263, y - 60, "IVA 10%: ")
         c.drawRightString(500, y - 60, "IVA 22%: ")
         c.setFont("Helvetica", 10)
-        c.drawString(135, y - 40, "€ {:.2f}".format(fattura.totali["4"]["imp"]))
-        c.drawString(325, y - 40, "€ {:.2f}".format(fattura.totali["10"]["imp"]))
-        c.drawRightString(550, y - 40, "€ {:.2f}".format(fattura.totali["22"]["imp"]))
-        c.drawString(135, y - 60, "€ {:.2f}".format(fattura.totali["4"]["iva"]))
-        c.drawString(325, y - 60, "€ {:.2f}".format(fattura.totali["10"]["iva"]))
-        c.drawRightString(550, y - 60, "€ {:.2f}".format(fattura.totali["22"]["iva"]))
+        c.drawString(135, y - 40, "€ {:.3f}".format(fattura.totali["4"]["imp"]))
+        c.drawString(325, y - 40, "€ {:.3f}".format(fattura.totali["10"]["imp"]))
+        c.drawRightString(550, y - 40, "€ {:.3f}".format(fattura.totali["22"]["imp"]))
+        c.drawString(135, y - 60, "€ {:.3f}".format(fattura.totali["4"]["iva"]))
+        c.drawString(325, y - 60, "€ {:.3f}".format(fattura.totali["10"]["iva"]))
+        c.drawRightString(550, y - 60, "€ {:.3f}".format(fattura.totali["22"]["iva"]))
 
         # Totale finale
         c.setLineWidth(2)  # Imposta spessore linea
@@ -1651,7 +1651,7 @@ def disegna_fattura(c, fattura):
         c.drawString(260, altezza - 250, "IVA")
         c.drawString(300, altezza - 250, "Quantità")
         c.drawString(400, altezza - 250, "Prezzo")
-        c.drawString(510, altezza - 250, "Totale")
+        c.drawRightString(550, altezza - 250, "Imponibile")
 
     disegna_intestazione()
     y = altezza-250
@@ -1675,10 +1675,15 @@ def disegna_fattura(c, fattura):
         c.setLineWidth(1)  # Imposta spessore linea cliente
         c.drawString(50, y, riga.articolo.nome)
         c.drawString(110, y, riga.articolo.descrizione)
+        if riga.articolo.categoria.nome == "Diciture":
+            c.line(50, y - 2, 550, y - 2)  # Linea per cliente
+            y -= 11
+            riga_counter += 1
+            continue
         c.drawString(260, y, str(riga.iva)+"%")
         c.drawRightString(350, y, str(riga.quantita))
         c.drawRightString(440, y, "€ {:.3f}".format(riga.prezzo))
-        c.drawRightString(550, y, "€ {:.2f}".format(riga.imp))
+        c.drawRightString(550, y, "€ {:.3f}".format(riga.imp))
         c.line(50, y-2, 550, y-2)  # Linea per cliente
         y -= 11
         riga_counter += 1

@@ -269,6 +269,7 @@ class Fattura(models.Model):
             "10": {"imp": 0.0, "iva": 0.0, "tot": 0.0},
             "22": {"imp": 0.0, "iva": 0.0, "tot": 0.0},
             "tot": 0.0,  # Valore totale fattura
+            "arr": 0.0,
         }
     data = models.DateField(default=datetime.now)
     cliente = models.ForeignKey('Cliente', on_delete=models.CASCADE)
@@ -292,6 +293,7 @@ class Fattura(models.Model):
             "10": {"imp": Decimal('0'), "iva": Decimal('0'), "tot": Decimal('0')},
             "22": {"imp": Decimal('0'), "iva": Decimal('0'), "tot": Decimal('0')},
             "tot": Decimal('0'),
+            "arr": Decimal('0'),
         }
         rigafattura = RigaFattura.objects.filter(fattura=self)
         # Itera su tutte le righe della fattura
@@ -302,13 +304,16 @@ class Fattura(models.Model):
             nuovi_totali[aliquota]["tot"] += riga.imp + riga.tot_iva
 
         nuovi_totali["tot"] = nuovi_totali["4"]["tot"] + nuovi_totali["10"]["tot"] + nuovi_totali["22"]["tot"]
-        nuovi_totali["tot"] = nuovi_totali["tot"].quantize(Decimal('0.01'), ROUND_HALF_UP)
+        nuovi_totali["arr"] = (10 - int((nuovi_totali["tot"] * 1000) % 10)) / 1000
+        if nuovi_totali["arr"] > 0.005:
+            nuovi_totali["arr"] = float(format(0.01 - nuovi_totali["arr"], ".3f"))
+            nuovi_totali["arr"] = -1 * nuovi_totali["arr"]
+        nuovi_totali["tot"] = nuovi_totali["tot"].quantize(Decimal('0.001'), ROUND_HALF_UP)
 
         for aliq in ["4", "10", "22"]:
-            imp = nuovi_totali[aliq]["imp"].quantize(Decimal('0.01'), ROUND_HALF_UP)
-            iva = nuovi_totali[aliq]["iva"].quantize(Decimal('0.01'), ROUND_HALF_UP)
-            tot = (imp + iva).quantize(Decimal('0.01'), ROUND_HALF_UP)
-
+            imp = nuovi_totali[aliq]["imp"]
+            iva = nuovi_totali[aliq]["iva"].quantize(Decimal('0.001'), ROUND_HALF_UP)
+            tot = (imp + iva)
             nuovi_totali[aliq]["imp"] = float(imp)
             nuovi_totali[aliq]["iva"] = float(iva)
             nuovi_totali[aliq]["tot"] = float(tot)
@@ -344,18 +349,20 @@ class RigaFattura(models.Model):
     articolo = models.ForeignKey('Articolo', on_delete=models.CASCADE)
     prezzo = models.DecimalField(max_digits=10, decimal_places=3, default=0.0)
     quantita = models.PositiveIntegerField()
-    imp = models.DecimalField(max_digits=20, decimal_places=2, default=0.0)
+    imp = models.DecimalField(max_digits=20, decimal_places=3, default=0.0)
     iva = models.PositiveSmallIntegerField(choices=IVA_SCELTE, default=4)
-    tot_iva = models.DecimalField(max_digits=20, decimal_places=2, default=0.0)
+    tot_iva = models.DecimalField(max_digits=20, decimal_places=3, default=0.0)
 
     def save(self, *args, **kwargs):
-        with transaction.atomic():
+        with (transaction.atomic()):
             if not self.prezzo:
                 self.prezzo = self.articolo.prezzo
             bias_imp = self.prezzo * Decimal(self.quantita)
-            self.imp = bias_imp.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            iva_calcolata = self.imp * (Decimal(self.iva) / 100)
-            self.tot_iva = iva_calcolata.quantize(Decimal('0.001'), rounding = ROUND_HALF_UP)
+            self.imp = bias_imp
+            #.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            iva_calcolata = Decimal(self.imp) * (Decimal(self.iva) / Decimal(100))
+            self.tot_iva = iva_calcolata
+            #.quantize(Decimal('0.01'), rounding = ROUND_HALF_UP)
         super().save(*args, **kwargs)
 
     def __str__(self):
