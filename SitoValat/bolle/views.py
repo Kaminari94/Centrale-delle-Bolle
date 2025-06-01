@@ -555,8 +555,10 @@ class ExportBolleView(View):
         linee.append("B99                                                                                                                                            ")
         file_name = f"014-CESSIONE-{data.strftime('%y%m%d')}"
         file_path = os.path.join(settings.BASE_DIR, 'temp', file_name)
-        with open(file_path, "w", encoding="utf-8") as file:
-            file.writelines(line + "\n" for line in linee)
+        with open(file_path, "w", encoding="utf-8", newline='') as file:
+            for linea in linee:
+                file.write(f"{linea}\r\n")
+            #OLD file.writelines(line + "\n" for line in linee) OLD
 
         # Ritorna il file come risposta scaricabile
         response = FileResponse(open(file_path, "rb"), as_attachment=True, filename=file_name)
@@ -1792,18 +1794,19 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
                     f"{reverse('fattura-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
             tipo_rf = TipoDocumento.objects.filter(nome="RF", concessionario=concessionario).first()
             articolo = get_object_or_404(Articolo, pk=articolo_id)
+            prezzo_pers = PrezziPersonalizzati.objects.filter(articolo=articolo, cliente=cliente).first()
+            if prezzo_pers:
+                if not prezzo:
+                    prezzo = prezzo_pers.prezzo
             if not prezzo:
                 prezzo = articolo.prezzo
             iva = articolo.iva
-            prezzo_pers = PrezziPersonalizzati.objects.filter(articolo=articolo, cliente=cliente).first()
-            if prezzo_pers:
-                prezzo = prezzo_pers.prezzo
             if cliente.tipo_documento_predefinito == tipo_rf:
                 articolo = get_object_or_404(Articolo, pk=articolo_id)
                 prezzo = articolo.prezzo_tr
                 iva = 22
-            print(type(prezzo))
-            print(prezzo)
+            #print(type(prezzo))
+            #print(prezzo)
             RigaFattura.objects.create(
                 fattura = self.get_object(),
                 articolo_id = articolo_id,

@@ -2,6 +2,9 @@ import io
 import base64
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
+import locale
+
+locale.setlocale(locale.LC_ALL, 'it_IT.UTF-8')
 
 def genera_pdf_base64(fattura):
     buffer = io.BytesIO()
@@ -71,12 +74,12 @@ def genera_pdf_base64(fattura):
         c.drawString(263, y - 60, "IVA 10%: ")
         c.drawRightString(500, y - 60, "IVA 22%: ")
         c.setFont("Helvetica", 10)
-        c.drawString(135, y - 40, "€ {:.3f}".format(fattura.totali["4"]["imp"]))
-        c.drawString(325, y - 40, "€ {:.3f}".format(fattura.totali["10"]["imp"]))
-        c.drawRightString(550, y - 40, "€ {:.3f}".format(fattura.totali["22"]["imp"]))
-        c.drawString(135, y - 60, "€ {:.3f}".format(fattura.totali["4"]["iva"]))
-        c.drawString(325, y - 60, "€ {:.3f}".format(fattura.totali["10"]["iva"]))
-        c.drawRightString(550, y - 60, "€ {:.3f}".format(fattura.totali["22"]["iva"]))
+        c.drawString(135, y - 40, locale.format_string("€ %.3f", fattura.totali["4"]["imp"], grouping=True))
+        c.drawString(325, y - 40, locale.format_string("€ %.3f", fattura.totali["10"]["imp"], grouping=True))
+        c.drawRightString(550, y - 40, locale.format_string("€ %.3f", fattura.totali["22"]["imp"], grouping=True))
+        c.drawString(135, y - 60, locale.format_string("€ %.3f", fattura.totali["4"]["iva"], grouping=True))
+        c.drawString(325, y - 60, locale.format_string("€ %.3f", fattura.totali["10"]["iva"], grouping=True))
+        c.drawRightString(550, y - 60, locale.format_string("€ %.3f", fattura.totali["22"]["iva"], grouping=True))
 
         # Totale finale
         c.setLineWidth(2)  # Imposta spessore linea
@@ -85,7 +88,7 @@ def genera_pdf_base64(fattura):
         c.drawString(50, y - 100, "Contributo ambientale CONAI assolto ove dovuto.")
         c.setFont("Helvetica-Bold", 14)
         c.drawString(400, y - 110, "Totale:")
-        c.drawRightString(550, y - 110, "€ {:.2f}".format(fattura.totali["tot"]))
+        c.drawRightString(550, y - 110, locale.format_string("€ %.2f", fattura.totali["tot"], grouping=True))
 
     def disegna_tabella_articoli(y):
         # Intestaziona tabella con i prodotti
@@ -126,8 +129,9 @@ def genera_pdf_base64(fattura):
             continue
         c.drawString(260, y, str(riga.iva)+"%")
         c.drawRightString(350, y, str(riga.quantita))
-        c.drawRightString(440, y, "€ {:.3f}".format(riga.prezzo))
-        c.drawRightString(550, y, "€ {:.3f}".format(riga.imp))
+
+        c.drawRightString(440, y, locale.format_string("€ %.3f", riga.prezzo, grouping=True))
+        c.drawRightString(550, y, locale.format_string("€ %.3f", riga.imp, grouping=True))
         c.line(50, y-2, 550, y-2)  # Linea per cliente
         y -= 11
         riga_counter += 1
