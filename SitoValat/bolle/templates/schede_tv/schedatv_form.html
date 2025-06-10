@@ -24,7 +24,7 @@
     <input type="number" id="giorno" name="giorno" class="form-control" value='{% now "j" %}' min="1" max="31">
 
     <label for="articolo" class="form-label mt-2">Articolo:</label>
-    <select name="articolo" class="form-select">
+    <select name="articolo" class="form-select" autofocus>
         <option value="">Selezionare un articolo...</option>
         {% for categoria in categorie %}
             {% if categoria.articoli.all %}

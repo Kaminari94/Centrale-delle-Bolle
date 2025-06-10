@@ -2008,7 +2008,7 @@ class SchedaTVListView(LoginRequiredMixin, ListView):
         data_inizio = self.get_data_filtrata(data_inizio_str, oggi, inizio=True)
         data_fine = self.get_data_filtrata(data_fine_str, oggi, inizio=False)
 
-        print(zona)
+        #DEBUG print(zona)
         # Filtro per tipo documento
         queryset = queryset.filter(tipo_documento_id=tipo_documento_id, cliente__zona__in=zona, data__range=(data_inizio, data_fine)).order_by('cliente__nome')
         return queryset
