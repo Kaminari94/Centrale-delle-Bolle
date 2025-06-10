@@ -598,7 +598,7 @@ class CaricoListView(LoginRequiredMixin, ListView):
         queryset = queryset.filter(zona__in = zonaconc)
         if data_inizio and data_fine:
             queryset = queryset.filter(data__range=[data_inizio, data_fine], zona__in=zonaconc)
-        return queryset
+        return queryset[:20]
 
     def get_context_data(self, **kwargs):
         user = self.request.user
@@ -764,7 +764,7 @@ class ResoListView(LoginRequiredMixin, ListView):
         queryset = queryset.filter(zona__in=zonaconc)
         if data_inizio and data_fine:
             queryset = queryset.filter(data__range=[data_inizio, data_fine], zona__in=zonaconc)
-        return queryset
+        return queryset[:20]
 
     def get_context_data(self, **kwargs):
         user = self.request.user
