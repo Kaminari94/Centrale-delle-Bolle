@@ -1,3 +1,4 @@
+from PyPDF2 import PdfMerger
 from django.views.generic import TemplateView, ListView, DetailView
 from django.views.generic import DeleteView, UpdateView, CreateView
 from django.contrib.auth.views import LoginView
@@ -18,12 +19,14 @@ from django.core.files.storage import default_storage
 from .utils.genera_pdf import genera_pdf_base64
 from .utils.parser import parse_file
 from django.utils.dateparse import parse_date
+from pdfminer.high_level import extract_text
 from django.http import FileResponse
 import os
 from django.utils.timezone import make_aware, now, is_aware
 from django.db.models import Sum, Q, F
 from django.utils import timezone
 from django.conf import settings
+from .utils import centrale_fattura
 
 class HomePageView(TemplateView):
     template_name = 'bolle/homepage.html'
@@ -2708,3 +2711,176 @@ def previsione_carico(request):
         'data_fine': data_fine.date()
     }
     return render(request, 'riepiloghi/previsioni.html', context)
+
+class UploadFatturaView(View):
+    template_name = 'riepiloghi/upload_fattura.html'
+
+    def get(self, request):
+        return render(request, self.template_name)
+
+    def post(self, request):
+        # Gestione upload file
+        file1 = request.FILES.get('file1')  # Primo file .xml.p7m
+        file2 = request.FILES.get('file2')  # Secondo file .xml.p7m
+
+        if not (file1 and file2):
+            return render(request, self.template_name, {'error': 'Caricare entrambi i file delle note credito CLS!'})
+
+        # Salva i file temporaneamente
+        temp_dir = os.path.join(settings.MEDIA_ROOT, 'temp')
+        os.makedirs(temp_dir, exist_ok=True)
+
+        file1_path = os.path.join(temp_dir, file1.name)
+        file2_path = os.path.join(temp_dir, file2.name)
+
+        with open(file1_path, 'wb+') as f:
+            for chunk in file1.chunks():
+                f.write(chunk)
+        with open(file2_path, 'wb+') as f:
+            for chunk in file2.chunks():
+                f.write(chunk)
+
+        # Estrai PDF dai file .p7m o .xml
+        try:
+            pdf1_path = self._process_file(file1_path)
+            pdf2_path = self._process_file(file2_path)
+        except Exception as e:
+            return render(request, self.template_name, {'error': f"Errore estrazione PDF: {str(e)}"})
+
+        # Unisci i PDF e analizza le bolle
+        merged_pdf_path = os.path.join(temp_dir, 'fattura_unita.pdf')
+        self._merge_pdfs([pdf1_path, pdf2_path], merged_pdf_path)
+
+        testo_pdf = extract_text(merged_pdf_path)
+        bolle_fattura = centrale_fattura.parse_fattura_pdf(testo_pdf)
+
+        if not bolle_fattura:
+            return render(request, self.template_name, {'error': 'Nessuna bolla trovata nella fattura!'})
+
+        # Estrai la data dalla prima bolla (supponendo che tutte siano dello stesso mese)
+        data_fattura_str = bolle_fattura[0]['data_bolla']  # Formato: 'DD/MM/YY'
+        data_fattura = datetime.strptime(data_fattura_str, '%d/%m/%y').date()
+        data_fattura = data_fattura.replace(day=1)
+
+        # Filtra le bolle del database per il mese/anno della fattura
+        bolle_db = self._get_bolle_by_month(data_fattura)
+
+        # Prepara i DataFrame come richiesto dalla tua funzione
+        df_bolle = pd.DataFrame([{
+            'numero_bolla': str(bolla.numero),
+            'data': bolla.data,
+            'cliente': bolla.cliente.nome,
+        } for bolla in bolle_db])
+
+        df_articoli_bolle = pd.DataFrame([{
+            'numero_bolla': str(riga.bolla.numero),
+            'codice_articolo': riga.articolo.nome,
+            'quantita': riga.quantita
+        } for bolla in bolle_db for riga in bolla.righe.all()])
+
+        # Esegui il confronto usando la tua funzione esistente
+        report_data = centrale_fattura.confronta_fattura_bolle(bolle_fattura, df_bolle, df_articoli_bolle)
+        # Converti il report in testo
+        report_text = self._format_report(report_data)
+
+        # Pulizia file temporanei
+        self._cleanup_temp_files([file1_path, file2_path, pdf1_path, pdf2_path, merged_pdf_path])
+
+        return render(request, self.template_name, {
+            'success': True,
+            'report_text': report_text,
+            'mese_anno': data_fattura.strftime('%B %Y').capitalize()
+        })
+
+    def _format_report(self, report_data):
+        """Genera un report dettagliato"""
+        html_output = ""
+
+        if report_data.get("errori"):
+            html_output.append("\nERRORI:")
+            for errore in report_data["errori"]:
+                html_output.append(f" - {errore}")
+
+        # Processa ogni bolla
+        for bolla in report_data.get("bolle", []):
+            if bolla["articoli_mancanti_in_fattura"] or bolla["articoli_mancanti_in_bolle"] or bolla[
+                "differenze_quantita"]:
+                html_output += f"<h4><b>BOLLA:</b> {bolla['numero_bolla']} - <b>DATA:</b> {bolla['data_bolla']} - <b>CLIENTE:</b> {bolla['cliente']}</h4>"
+
+                # Articoli mancanti
+                if bolla["articoli_mancanti_in_fattura"]:
+                    html_output += "<h5>ARTICOLI PRESENTI NELLE BOLLE MA NON IN FATTURA:</h5>"
+                    html_output += "<ul>"
+                    for art in bolla["articoli_mancanti_in_fattura"]:
+                        html_output += f"<li>{art}</li>"
+                    html_output += "</ul>"
+
+                if bolla["articoli_mancanti_in_bolle"]:
+                    html_output += "<h5>ARTICOLI PRESENTI IN FATTURA MA NON NELLE BOLLE:</h5>"
+                    html_output += "<ul>"
+                    for art in bolla["articoli_mancanti_in_bolle"]:
+                        html_output += f"<li>{art}</li>"
+                    html_output += "</ul>"
+
+                # Differenze quantità
+                if bolla["differenze_quantita"]:
+                    html_output += "<h5>DIFFERENZE DI QUANTITÀ:</h5>"
+                    html_output += "<table class='table table-hover table-sm'>"
+                    html_output += "<thead><tr><th>Articolo</th><th>Q.tà Bolle</th><th>Q.tà Fattura</th><th>Differenza</th></tr></thead>"
+                    html_output += "<tbody>"
+                    for diff in bolla["differenze_quantita"]:
+                        html_output += "<tr>"
+                        html_output += f"<td>{diff['codice_articolo']}</td>"
+                        html_output += f"<td>{diff['quantita_bolla']:.2f}</td>"
+                        html_output += f"<td>{diff['quantita_fattura']:.2f}</td>"
+                        html_output += f"<td>{diff['differenza']:.2f}</td>"
+                        html_output += "</tr>"
+                    html_output += "</tbody>"
+                    html_output += "</table>"
+
+        return "".join(html_output)
+
+    def _process_file(self, file_path):
+        """Estrae PDF da .p7m o .xml"""
+        if file_path.lower().endswith('.p7m'):
+            output_path = file_path.replace('.p7m', '.pdf')
+            centrale_fattura.clean_p7m(file_path, output_path)
+        elif file_path.lower().endswith('.xml'):
+            output_path = file_path.replace('.xml', '.pdf')
+            centrale_fattura.extract_pdf_from_xml(file_path, output_path)
+        else:
+            raise ValueError("Formato file non supportato")
+        return output_path
+
+    def _merge_pdfs(self, pdf_paths, output_path):
+        """Unisce i PDF in un unico file"""
+        merger = PdfMerger()
+        for pdf in pdf_paths:
+            merger.append(pdf)
+        merger.write(output_path)
+        merger.close()
+
+    def _get_bolle_by_month(self, data_fattura):
+        """Filtra le bolle del database per mese/anno"""
+        inizio_mese = data_fattura.replace(day=1)
+        fine_mese = inizio_mese + relativedelta(months=1) - relativedelta(seconds=1)
+        if hasattr(self.request.user, 'zona'):
+            tipi = TipoDocumento.objects.filter(concessionario=self.request.user.zona.concessionario, nome="CLS")
+        elif hasattr(self.request.user, 'concessionario'):
+            tipi = TipoDocumento.objects.filter(concessionario=self.request.user.concessionario, nome="CLS")
+        else:
+            tipi = TipoDocumento.objects.none()
+
+        return Bolla.objects.filter(
+            tipo_documento__in=tipi,
+            data__gte=inizio_mese,
+            data__lte=fine_mese
+        ).prefetch_related('righe')
+
+    def _cleanup_temp_files(self, file_paths):
+        """Elimina i file temporanei"""
+        for path in file_paths:
+            try:
+                os.remove(path)
+            except OSError:
+                pass

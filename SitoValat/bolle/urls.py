@@ -57,4 +57,5 @@ urlpatterns = [
     path('fatture/scarica-tutte-pdf/', scarica_tutte_fatture_pdf, name='scarica-tutte-pdf'),
     path('riepiloghi/avanzato/', report_avanzato, name='report-avanzato'),
     path('riepiloghi/previsioni/', previsione_carico, name='previsione-carico'),
+    path('riepiloghi/controllo-fattura-cls/', UploadFatturaView.as_view(), name='upload-fattura')
 ]

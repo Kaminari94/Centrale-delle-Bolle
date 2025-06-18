@@ -1,0 +1,33 @@
+{% extends 'bolle/homepage.html' %}
+
+{% block content %}
+<h2>Controllo Note Credito CLS</h2>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="form-group">
+        <label>Nota Credito 1 (.xml.p7m):</label>
+        <input class="form-control" type="file" name="file1" accept=".xml.p7m,.xml" required>
+    </div>
+    <div class="form-group">
+        <label>Nota Credito 2 (.xml.p7m):</label>
+        <input class="form-control" type="file" name="file2" accept=".xml.p7m,.xml" required>
+    </div>
+    <button type="submit" class="btn btn-primary mt-3">Elabora</button>
+</form>
+
+{% if success %}
+<hr>
+<h3><b>Bolle del mese: {{ mese_anno }}</b></h3>
+
+    {% if report_text %}
+        <div class="card mt-3">
+            <div class="card-body ">{{report_text| safe}}</div>
+        </div>
+    {% endif %}
+{% endif %}
+{% endblock %}
