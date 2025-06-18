@@ -1,8 +1,11 @@
+import base64
+
 from PyPDF2 import PdfMerger
 from django.views.generic import TemplateView, ListView, DetailView
 from django.views.generic import DeleteView, UpdateView, CreateView
 from django.contrib.auth.views import LoginView
 from .models import *
+import fitz
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.urls import reverse_lazy
 from django.http import HttpResponseForbidden, HttpResponseRedirect
@@ -2720,38 +2723,23 @@ class UploadFatturaView(View):
 
     def post(self, request):
         # Gestione upload file
-        file1 = request.FILES.get('file1')  # Primo file .xml.p7m
-        file2 = request.FILES.get('file2')  # Secondo file .xml.p7m
+        file1_bytes = request.FILES['file1'].read()
+        file2_bytes = request.FILES['file2'].read()
 
-        if not (file1 and file2):
+        if not (file1_bytes and file2_bytes):
             return render(request, self.template_name, {'error': 'Caricare entrambi i file delle note credito CLS!'})
-
-        # Salva i file temporaneamente
-        temp_dir = os.path.join(settings.MEDIA_ROOT, 'temp')
-        os.makedirs(temp_dir, exist_ok=True)
-
-        file1_path = os.path.join(temp_dir, file1.name)
-        file2_path = os.path.join(temp_dir, file2.name)
-
-        with open(file1_path, 'wb+') as f:
-            for chunk in file1.chunks():
-                f.write(chunk)
-        with open(file2_path, 'wb+') as f:
-            for chunk in file2.chunks():
-                f.write(chunk)
 
         # Estrai PDF dai file .p7m o .xml
         try:
-            pdf1_path = self._process_file(file1_path)
-            pdf2_path = self._process_file(file2_path)
+            pdf1_bytes = self._process_bytes(file1_bytes, request.FILES['file1'].name)
+            pdf2_bytes = self._process_bytes(file2_bytes, request.FILES['file2'].name)
         except Exception as e:
             return render(request, self.template_name, {'error': f"Errore estrazione PDF: {str(e)}"})
 
         # Unisci i PDF e analizza le bolle
-        merged_pdf_path = os.path.join(temp_dir, 'fattura_unita.pdf')
-        self._merge_pdfs([pdf1_path, pdf2_path], merged_pdf_path)
+        merged_pdf_bytes = self._merge_in_memory([pdf1_bytes, pdf2_bytes])
 
-        testo_pdf = extract_text(merged_pdf_path)
+        testo_pdf = self._extract_text_fast(merged_pdf_bytes)
         bolle_fattura = centrale_fattura.parse_fattura_pdf(testo_pdf)
 
         if not bolle_fattura:
@@ -2784,13 +2772,37 @@ class UploadFatturaView(View):
         report_text = self._format_report(report_data)
 
         # Pulizia file temporanei
-        self._cleanup_temp_files([file1_path, file2_path, pdf1_path, pdf2_path, merged_pdf_path])
+        #self._cleanup_temp_files([file1_path, file2_path, pdf1_path, pdf2_path, merged_pdf_path])
 
         return render(request, self.template_name, {
             'success': True,
             'report_text': report_text,
             'mese_anno': data_fattura.strftime('%B %Y').capitalize()
         })
+
+    def _extract_text_fast(self, pdf_bytes):
+        doc = fitz.open("pdf", pdf_bytes)
+        return chr(12).join([page.get_text() for page in doc])
+
+    def _process_bytes(self, file_bytes, filename):
+        if filename.lower().endswith('.p7m'):
+            return self._extract_p7m_bytes(file_bytes)
+        elif filename.lower().endswith('.xml'):
+            return self._extract_p7m_bytes(file_bytes)
+
+    def _extract_p7m_bytes(self, data):
+        pdf_start = data.find(b"<Attachment>")
+        pdf_end = data.find(b"</Attachment>")
+        base64_pdf = data[pdf_start + 12:pdf_end].strip()
+        return base64.b64decode(base64_pdf)
+
+    def _merge_in_memory(self, pdfs_list):
+        merger = PdfMerger()
+        for pdf_bytes in pdfs_list:
+            merger.append(BytesIO(pdf_bytes))
+        output = BytesIO()
+        merger.write(output)
+        return output.getvalue()
 
     def _format_report(self, report_data):
         """Genera un report dettagliato"""
