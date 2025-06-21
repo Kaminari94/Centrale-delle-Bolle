@@ -29,6 +29,8 @@
         }
         @media only screen and (max-width: 1200px) {
             body {
+                transform: scale(1.9);
+                transform-origin: left top;
                 font-size: 10pt; /* Modifica la dimensione del font (solo del footer a questo punto)*/
                 font-family: Arial, sans-serif; /* Miglior font per la zjiang a quanto pare */
                 /* border: 1px solid red; DEBUG:  Mostra i margini */
@@ -69,7 +71,7 @@
             font-size: 7pt;
         }
         td.quant {
-            font-size: 9pt;
+            font-size: 7pt;
         }
 
         p.footer {
@@ -137,14 +139,14 @@
                 <tr>
                     <th scope="col">Cod.</th>
                     <th scope="col">Descrizione</th>
-                    <th scope="col" align="right">Qnt</th>
+                    <th scope="col" align="right">Qnt.</th>
                 </tr>
             </thead>
             <tbody>
                 {% for riga in bolla.righe.all %}
                 <tr>
                     <td class="cod"><strong>{{ riga.articolo.nome }}</strong></td>
-                    <td class="descr">{{ riga.articolo.descrizione }}<br>{{ riga.lotto }}</td>
+                    <td class="descr">{{ riga.articolo.descrizione }}<br>Lotto: {{ riga.lotto }}</td>
                     <td class="quant" align="right">{{ riga.quantita }}</td>
                 </tr>
                 {% endfor %}
