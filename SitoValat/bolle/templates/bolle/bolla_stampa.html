@@ -29,13 +29,11 @@
         }
         @media only screen and (max-width: 1200px) {
             body {
-                transform: scale(1.9);
-                transform-origin: left top;
                 font-size: 10pt; /* Modifica la dimensione del font (solo del footer a questo punto)*/
-                font-family: Arial, sans-serif; /* Miglior font per la zjiang a quanto pare */
+                font-family: Helvetica, sans-serif; /* Miglior font per la zjiang a quanto pare */
                 /* border: 1px solid red; DEBUG:  Mostra i margini */
-                margin-left: 3mm;
-                margin-right: 10mm;
+                margin-left: 5mm;
+                margin-right: 14mm;
                 /* max-width: 48mm; */
             }
         }
@@ -43,7 +41,6 @@
         table {
             width: 100%;
             border-collapse: collapse;
-            table-layout: fixed;
         }
 
         /* Imposta uno stile per le celle */
@@ -60,17 +57,17 @@
         td.intest {
             vertical-align: top;
         }
-        td.lotto {
-            font-size: 7pt;
-        }
 
         td.descr {
+            width: 25mm;
             font-size: 7pt;
         }
         td.cod {
+            width: 13mm;
             font-size: 7pt;
         }
         td.quant {
+            width: 10mm;
             font-size: 7pt;
         }
 
@@ -86,8 +83,13 @@
     </style>
 </head>
 <body>
-        <p align="center" class="d-print-none"><button style="width:100px;height:40px;font-size:14pt;" onclick="window.history.back()">Stampa</button></p>
-        <!-- Intestazione -->
+        <!--<p align="center" class="d-print-none"><button style="width:100px;height:40px;font-size:14pt;" onclick="window.history.back()">Stampa</button></p>
+        Intestazione -->
+        <script>
+            window.onload = function() {
+                window.print();
+            };
+        </script>
         <table>
             <tr>
                 <td class="intest" align="left">
