@@ -76,15 +76,15 @@
             font-size: 12pt;
             width: 100%;
         }
+        @media print{
+                .d-print-none {
+                    display: none !important;
+                }
+            }
     </style>
 </head>
 <body>
-        <!--<p align="center" class="d-print-none"><button style="width:100px;height:40px;font-size:14pt;" onclick="window.print()">Stampa</button></p>-->
-        <script>
-            window.onload = function() {
-                window.print();
-            };
-        </script>
+        <p align="center" class="d-print-none"><button style="width:100px;height:40px;font-size:14pt;" onclick="window.history.back()">Stampa</button></p>
         <!-- Intestazione -->
         <table>
             <tr>
@@ -136,8 +136,7 @@
             <thead>
                 <tr>
                     <th scope="col">Cod.</th>
-                    <th scope="col">Des.</th>
-                    <th scope="col" align="right">Lotto</th>
+                    <th scope="col">Descrizione</th>
                     <th scope="col" align="right">Qnt</th>
                 </tr>
             </thead>
@@ -145,8 +144,7 @@
                 {% for riga in bolla.righe.all %}
                 <tr>
                     <td class="cod"><strong>{{ riga.articolo.nome }}</strong></td>
-                    <td class="descr">{{ riga.articolo.descrizione }}</td>
-                    <td class="lotto" align="right">{{ riga.lotto }}</td>
+                    <td class="descr">{{ riga.articolo.descrizione }}<br>{{ riga.lotto }}</td>
                     <td class="quant" align="right">{{ riga.quantita }}</td>
                 </tr>
                 {% endfor %}
