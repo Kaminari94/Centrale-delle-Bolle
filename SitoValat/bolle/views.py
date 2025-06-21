@@ -31,6 +31,7 @@ from django.db.models import Sum, Q, F
 from django.utils import timezone
 from django.conf import settings
 from .utils import centrale_fattura
+from .utils.gen_pdf_bolla import genera_pdf_bolla
 
 class HomePageView(TemplateView):
     template_name = 'bolle/homepage.html'
@@ -363,6 +364,15 @@ class RigaBollaDeleteView(DeleteView):
 class BollaStampaView(DetailView):
     model = Bolla
     template_name = "bolle/bolla_stampa.html"
+
+def BollaStampaViewPDF(request, pk):
+    bolla = get_object_or_404(Bolla, pk=pk)
+
+    pdf_buffer = genera_pdf_bolla(bolla)
+    response = HttpResponse(pdf_buffer, content_type="application/pdf")
+    nome_file = f'Bolla-N-{bolla.numero}-{bolla.cliente.nome.replace(" ", "_")}.pdf'
+    response['Content-Disposition'] = f'attachment; filename={nome_file}'
+    return response
 
 class ArticoliConcessiForm(ModelForm):
     class Meta:

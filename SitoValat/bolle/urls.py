@@ -13,6 +13,7 @@ urlpatterns = [
     path('bolle/<int:pk>/delete/', BollaDeleteView.as_view(), name='bolla-delete'),
     path('bolle/<int:pk>/rigadelete/', RigaBollaDeleteView.as_view(), name='riga-delete'),
     path('bolle/<int:pk>/stampa/', BollaStampaView.as_view(), name='bolla-stampa'),
+    path('bolle/<int:pk>/stampapdf/', BollaStampaViewPDF, name='bolla-stampa-pdf'),
     path('edit/articoli-concessi/<int:pk>/', ArticoliConcessiUpdateView.as_view(), name='articoli-concessi-update'),
     path('bolle/import-file/', ImportFileView.as_view(), name='import-file'),
     path('confirm-import/', ConfirmImportView.as_view(), name='confirm-import'),

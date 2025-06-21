@@ -88,6 +88,7 @@
                     <div class="d-none d-lg-block">
                         <a href="{% url 'bolla-detail' bolla.pk %}" class="btn btn-sm btn-primary"><i class="bi bi-folder2-open"></i> Apri</a>
                         <a href="{% url 'bolla-stampa' bolla.pk %}" class="btn btn-sm btn-dark" target="_blank"><i class="bi bi-printer"></i> Stampa</a>
+                        <a href="{% url 'bolla-stampa-pdf' bolla.pk %}" class="btn btn-sm btn-dark" target="_blank"><i class="bi bi-filetype-pdf"></i> PDF</a>
                         <a href="{% url 'bolla-update' bolla.pk %}" class="btn btn-sm btn-warning"><i class="bi bi-pencil"></i> Modifica</a>
                         <a href="{% url 'bolla-delete' bolla.pk %}" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i> Elimina</a>
                     </div>
@@ -115,6 +116,7 @@
       <div class="d-grid gap-2 d-lg-none">
         <a href="{% url 'bolla-detail' bolla.pk %}" class="btn btn-sm btn-primary"><i class="bi bi-folder2-open"></i> Apri</a>
         <a href="{% url 'bolla-stampa' bolla.pk %}" class="btn btn-sm btn-success" target="_blank"><i class="bi bi-printer"></i> Stampa</a>
+        <a href="{% url 'bolla-stampa' bolla.pk %}" class="btn btn-sm btn-success" target="_blank"><i class="bi bi-filetype-pdf"></i> PDF</a>
         <a href="{% url 'bolla-update' bolla.pk %}" class="btn btn-sm btn-warning"><i class="bi bi-pencil"></i> Modifica</a>
         <a href="{% url 'bolla-delete' bolla.pk %}" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i> Elimina</a>
       </div>
