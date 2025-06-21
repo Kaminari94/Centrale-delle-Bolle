@@ -4,6 +4,7 @@ from PyPDF2 import PdfMerger
 from django.views.generic import TemplateView, ListView, DetailView
 from django.views.generic import DeleteView, UpdateView, CreateView
 from django.contrib.auth.views import LoginView
+from django.contrib.auth import user_logged_in
 from .models import *
 import fitz
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -33,8 +34,84 @@ from .utils import centrale_fattura
 
 class HomePageView(TemplateView):
     template_name = 'bolle/homepage.html'
-    model = Concessionario
-    nome = Concessionario.nome
+
+    def get_context_data(self, *args, **kwargs):
+        user = self.request.user
+        context = super().get_context_data(**kwargs)
+        if hasattr(user, 'zona'):
+            # L'utente ha una zona: Mostra solo i clienti della zona
+            context["clienti"] = Cliente.objects.filter(zona=user.zona).exclude(
+            tipo_documento_predefinito__nome="NTV")
+        elif hasattr(user, 'concessionario'):
+            # L'utente ha un concessionario: Mostra tutti i clienti del concessionario
+            context["clienti"] = Cliente.objects.filter(concessionario=user.concessionario).exclude(
+            tipo_documento_predefinito__nome="NTV")
+        else:
+            # L'utente non ha né zona né concessionario: Negare l'accesso
+            context["clienti"] = Cliente.objects.none()
+
+        return context
+
+    def post(self, request):
+        cliente_id = request.POST.get("cliente")
+        articoli = request.POST.get("articoli")
+        try:
+            with transaction.atomic():
+                if cliente_id and articoli:
+                    cliente = get_object_or_404(Cliente, pk=cliente_id)
+                    articoli_list = articoli.strip().split("\n")
+                    somma = 0
+                    for articolo in articoli_list:
+                        codice, quantita = articolo.split()
+                        quantita = int(quantita)
+                        somma += quantita
+                    if somma <= 0:
+                        context = self.get_context_data()
+                        context['messages'] = [f"Somma delle quantità minore o uguale a zero.\nLista Articoli:{', '.join(articoli_list)}"]
+                        return render(request, self.template_name, context)
+                    bolla = Bolla.objects.create(
+                        cliente=cliente,
+                        tipo_documento=cliente.tipo_documento_predefinito,
+                    )
+                    bolla.save()
+
+                    for articolo in articoli_list:
+                        codice, quantita = articolo.split()
+                        quantita = int(quantita)
+                        if quantita == 0:
+                            continue
+
+                        if codice == '31103':
+                            codice = "031103"
+                        elif codice == '31163':
+                            codice = "031163"
+                        elif len(codice) == 3:
+                            codice = "600" + codice
+                        elif len(codice) == 5:
+                            codice = "6" + codice
+                        articolo = Articolo.objects.get(nome=codice)
+                        if not articolo:
+                            context = self.get_context_data()
+                            context['messages'] = [f"Articolo errato ({codice}.\nLista Articoli:{articoli_list}"]
+                            return render(request, self.template_name, context)
+
+                        ultimo_carico =  RigaCarico.objects.filter(articolo=articolo).order_by('-carico__data').first()
+
+                        riga = RigaBolla.objects.create(
+                            bolla=bolla,
+                            articolo=articolo,
+                            quantita=quantita,
+                            lotto= ultimo_carico.lotto,
+                        )
+                        riga.save()
+                    return redirect('bolla-detail', pk=bolla.pk)  # Redirige alla lista delle bolle
+                else:
+                    # Gestisci gli errori di input
+                    context = self.get_context_data()
+                    context['messages'] = ["Dati mancanti o non validi."]
+                    return render(request, self.template_name, context)
+        except Exception as e:
+            print(f"Errore durante la creazione della bolla veloce: {e}")
 
 class BollaListView(LoginRequiredMixin, ListView):
     model = Bolla

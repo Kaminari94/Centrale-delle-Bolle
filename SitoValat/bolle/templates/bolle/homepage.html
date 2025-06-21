@@ -185,6 +185,43 @@
                     </a>
                 </div>
             </div>
+            <div class="card text-center p-3 shadow hover-effect" style="align: center; width: 100%;">
+            <h4>Bolla Veloce:</h4>
+            {% if messages %}
+                <div class="card-body">
+                    <div class="alert alert-danger">
+                        {% for message in messages %}
+                            {{ message }}
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+            <form method="post" class="form">
+            {% csrf_token %}
+                <label for="cliente" class="form-label">Cliente:</label>
+                <select name="cliente" id="cliente" class="form-select">
+                    <option value="">Selezionare un cliente...</option>
+                    {% for cliente in clienti %}
+                        <option value="{{ cliente.id }}">
+                            {{ cliente.nome }} - {{cliente.via}}
+                        </option>
+                    {% endfor %}
+                </select>
+                <label for="articoli" class="form-label">Articoli:</label>
+                <textarea name="articoli" class="form-control" rows="7" cols="15">
+127 0
+128 0
+122 0
+101 0
+125 0
+114 0
+171 0</textarea>
+                <div class="mt-3">
+                    <button type="submit" class="btn btn-success">OK</button>
+                    <a href="{% url 'home' %}" class="btn btn-secondary">Cancella</a>
+                </div>
+            </form>
+        </div>
         </div>
 
         <div class="d-none d-lg-flex justify-content-center gap-4 flex-wrap">
