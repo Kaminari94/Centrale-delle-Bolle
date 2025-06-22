@@ -3,41 +3,26 @@
 <head>
     {% load static %}
     <meta charset="UTF-8">
-    <!--<meta name="viewport" content="width=48mm, initial-scale=1.65, minimum-scale=1.65, maximum-scale=1.65, user-scalable=no">
-    -->
-    <meta name="viewport" content="width=48mm, initial-scale=1.0">
+    <meta name="viewport" content="width=48mm, initial-scale=1.65, minimum-scale=1.65, maximum-scale=1.65, user-scalable=no">
+    <!--<meta name="viewport" content="width=48mm, initial-scale=1.0">-->
     <title>Stampa Bolla</title>
     <link rel="shortcut icon" type="image/png" href="{% static 'images/favicon-32x32.png' %}" >
 
     <style>
-        @media only screen and (max-width: 600px) {
-
-            body {
-                transform: scale(1.9);
+        body {
+                transform: scale(1.1);
                 transform-origin: left top;
-                font-size: 10pt; /* Modifica la dimensione del font (solo del footer a questo punto)*/
+                font-size: 8pt; /* Modifica la dimensione del font (solo del footer a questo punto)*/
                 font-family: Arial, sans-serif; /* Miglior font per la zjiang a quanto pare */
                 /* border: 1px solid red; DEBUG:  Mostra i margini */
-                margin-left: 0;
                 margin-left: 0mm;
-                margin-right: 3mm;
-                max-width: 48mm;
+                margin-right: 4mm;
+                max-width: 44mm;
             }
             p {
                 text-align: center;
                 max-width: inherit;
             }
-        }
-        @media only screen and (max-width: 1200px) {
-            body {
-                font-size: 10pt; /* Modifica la dimensione del font (solo del footer a questo punto)*/
-                font-family: Helvetica, sans-serif; /* Miglior font per la zjiang a quanto pare */
-                /* border: 1px solid red; DEBUG:  Mostra i margini */
-                margin-left: 5mm;
-                margin-right: 14mm;
-                /* max-width: 48mm; */
-            }
-        }
         /* Aggiungi uno stile per la tabella */
         table {
             width: 100%;
@@ -48,7 +33,7 @@
         td, th {
             word-wrap: break-word;
             overflow-wrap: break-word; /* Compatibilità aggiuntiva */
-            font-size: 9pt; /* Adatta la dimensione del font per far stare il contenuto */
+            font-size: 8pt; /* Adatta la dimensione del font per far stare il contenuto */
         }
 
         .d-print-none {
