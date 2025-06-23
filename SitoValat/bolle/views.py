@@ -68,17 +68,25 @@ class HomePageView(TemplateView):
                         somma += quantita
                     if somma <= 0:
                         context = self.get_context_data()
-                        context['messages'] = [f"Somma delle quantità minore o uguale a zero.\nLista Articoli:{', '.join(articoli_list)}"]
+                        context['messages'] = [f"Somma delle quantità minore o uguale a zero."]
+                        context['articoli_list'] = articoli
+                        context['cliente_selezionato'] = str(cliente.pk)
                         return render(request, self.template_name, context)
+                    # Dopo i primi controlli si crea la bolla.
                     bolla = Bolla.objects.create(
                         cliente=cliente,
                         tipo_documento=cliente.tipo_documento_predefinito,
                     )
                     bolla.save()
+                    arti = Articolo.objects.all().values_list('nome', flat=True)
+                    articoli_concessi = ArticoliConcessi.objects.filter(
+                        proprietario=cliente.proprietario
+                    ).values_list('articolo', flat=True)
 
                     for articolo in articoli_list:
                         codice, quantita = articolo.split()
                         quantita = int(quantita)
+
                         if quantita == 0:
                             continue
 
@@ -90,10 +98,26 @@ class HomePageView(TemplateView):
                             codice = "600" + codice
                         elif len(codice) == 5:
                             codice = "6" + codice
-                        articolo = Articolo.objects.get(nome=codice)
-                        if not articolo:
+                        if codice not in arti:
                             context = self.get_context_data()
-                            context['messages'] = [f"Articolo errato ({codice}.\nLista Articoli:{articoli_list}"]
+                            context['messages'] = [f"Articolo errato: {codice}."]
+                            context['articoli_list'] = articoli
+                            context['cliente_selezionato'] = str(cliente.pk)
+                            tipo_documento = bolla.tipo_documento
+                            tipo_documento.ultimo_numero -= 1
+                            tipo_documento.save()
+                            bolla.delete()
+                            return render(request, self.template_name, context)
+                        articolo = Articolo.objects.get(nome=codice)
+                        if articolo.pk not in articoli_concessi: # Se l'articolo non è presente negli articoli concessi
+                            context = self.get_context_data()
+                            context['messages'] = [f"Articolo {codice} non concesso a {cliente.nome} {cliente.via}."]
+                            context['articoli_list'] = articoli
+                            context['cliente_selezionato'] = str(cliente.pk)
+                            tipo_documento = bolla.tipo_documento
+                            tipo_documento.ultimo_numero -= 1
+                            tipo_documento.save()
+                            bolla.delete()
                             return render(request, self.template_name, context)
 
                         ultimo_carico =  RigaCarico.objects.filter(articolo=articolo).order_by('-carico__data').first()
@@ -104,8 +128,8 @@ class HomePageView(TemplateView):
                             quantita=quantita,
                             lotto= ultimo_carico.lotto,
                         )
-                        riga.save()
-                    return redirect('bolla-detail', pk=bolla.pk)  # Redirige alla lista delle bolle
+                        riga.save() #Salviamo la rigaaaaa e via con la prossima babydoll
+                    return redirect('bolla-detail', pk=bolla.pk)  # Redirige alla lista delle bolle, dove c'è il bottone per stampare che pd non funziona su android
                 else:
                     # Gestisci gli errori di input
                     context = self.get_context_data()
