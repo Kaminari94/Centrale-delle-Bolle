@@ -599,13 +599,13 @@ class ExportBolleView(View):
         # Convertiamo a datetime
         if data_inizio_str:
             data_inizio = datetime.strptime(data_inizio_str, "%d %m %Y %H:%M")
-            print(data_inizio)
+            #print(data_inizio) debug
         else:
             data_inizio = now().replace(hour=0, minute=0, second=0, microsecond=0)
 
         if data_fine_str:
             data_fine = datetime.strptime(data_fine_str, "%d %m %Y %H:%M")
-            print(data_fine)
+            #print(data_fine) debug
         else:
             data_fine = now().replace(hour=23, minute=59, second=59, microsecond=999999)
 
@@ -659,6 +659,8 @@ class ExportBolleView(View):
             # Esporta gli articoli della bolla
             righe_bolla = RigaBolla.objects.filter(bolla=bolla)
             for riga in righe_bolla:
+                if riga.articolo.categoria.nome == "Imballaggio":
+                    continue
                 prezzo = int(float(riga.articolo.prezzo) * 100)
                 linea = (
                     f"K02{bolla.numero:0>7}"  # Numero bolla (7 caratteri)
