@@ -86,7 +86,7 @@ class HomePageView(TemplateView):
                     for articolo in articoli_list:
                         codice, quantita = articolo.split()
                         quantita = int(quantita)
-
+                        print(codice)
                         if quantita == 0:
                             continue
 
@@ -126,7 +126,7 @@ class HomePageView(TemplateView):
                             bolla=bolla,
                             articolo=articolo,
                             quantita=quantita,
-                            lotto= ultimo_carico.lotto,
+                            lotto= ultimo_carico.lotto if ultimo_carico else "---",
                         )
                         riga.save() #Salviamo la rigaaaaa e via con la prossima babydoll
                     return redirect('bolla-detail', pk=bolla.pk)  # Redirige alla lista delle bolle, dove c'è il bottone per stampare che pd non funziona su android
