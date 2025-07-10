@@ -147,6 +147,8 @@ def confronta_fattura_bolle(dati_fattura_lista, df_bolle, df_articoli_bolle):
 
         # Confronta quantità per articoli comuni
         for codice in codici_bolla & codici_fattura:
+            if codice in ["027110/R", "027110/S"]:
+                continue
             qta_bolla = articoli_bolla_dict[codice]["quantita"]
             qta_fattura = articoli_fattura_dict[codice]["quantita"]
 
