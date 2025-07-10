@@ -2880,7 +2880,7 @@ class UploadFatturaView(View):
             'numero_bolla': str(riga.bolla.numero),
             'codice_articolo': riga.articolo.nome,
             'quantita': riga.quantita
-        } for bolla in bolle_db for riga in bolla.righe.all()])
+        } for bolla in bolle_db for riga in bolla.righe.all() if riga.articolo.nome not in ["027110/R", "027110/S"]])
 
         # Esegui il confronto usando la tua funzione esistente
         report_data = centrale_fattura.confronta_fattura_bolle(bolle_fattura, df_bolle, df_articoli_bolle)
@@ -2925,9 +2925,9 @@ class UploadFatturaView(View):
         html_output = ""
 
         if report_data.get("errori"):
-            html_output.append("\nERRORI:")
+            html_output += "\nERRORI:"
             for errore in report_data["errori"]:
-                html_output.append(f" - {errore}")
+                html_output += f" - {errore}"
 
         # Processa ogni bolla
         for bolla in report_data.get("bolle", []):
@@ -2965,6 +2965,9 @@ class UploadFatturaView(View):
                         html_output += "</tr>"
                     html_output += "</tbody>"
                     html_output += "</table>"
+
+        if not html_output:
+            html_output = "<h5>Nessun articolo mancante, tutto ok!</h5>"
 
         return "".join(html_output)
 
