@@ -58,7 +58,10 @@
                                 </select>
                             </div>
                         </div>
-                        <button type="submit" class="btn btn-gradient btn-primary">Visualizza Conteggio Giornaliero</button>
+                        <button type="submit" id="BtnCont" class="btn btn-gradient btn-primary">Visualizza Conteggio Giornaliero</button>
+                        <div class="spinner-border spinner-border-sm invisible" id="SpinCont" role="status">
+                          <span class="visually-hidden">Loading...</span>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -336,4 +339,13 @@
             </div>
     </div>
 </div>
+
+<script>
+    BtnCont = document.getElementById("BtnCont");
+    BtnCont.addEventListener("click", function() {
+        spin = document.getElementById("SpinCont");
+        spin.classList.remove('invisible');
+        spin.classList.add('visible');
+    });
+</script>
 {% endblock %}
