@@ -2,7 +2,7 @@
 {% load crispy_forms_tags %}
 {% block title %}Nuovo Reso{% endblock %}
 {% block content %}
-<h1>Nuovo Reso</h1>
+<h1>Crea un Nuovo Reso</h1>
 <form method="post">
     {% csrf_token %}
     {{ form|crispy }}

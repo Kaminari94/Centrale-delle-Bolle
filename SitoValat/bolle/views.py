@@ -42,11 +42,11 @@ class HomePageView(TemplateView):
         if hasattr(user, 'zona'):
             # L'utente ha una zona: Mostra solo i clienti della zona
             context["clienti"] = Cliente.objects.filter(zona=user.zona).exclude(
-            tipo_documento_predefinito__nome="NTV")
+            tipo_documento_predefinito__nome="NTV").order_by("tipo_documento_predefinito__nome")
         elif hasattr(user, 'concessionario'):
             # L'utente ha un concessionario: Mostra tutti i clienti del concessionario
             context["clienti"] = Cliente.objects.filter(concessionario=user.concessionario).exclude(
-            tipo_documento_predefinito__nome="NTV")
+            tipo_documento_predefinito__nome="NTV").order_by("tipo_documento_predefinito__nome")
         else:
             # L'utente non ha né zona né concessionario: Negare l'accesso
             context["clienti"] = Cliente.objects.none()
@@ -345,22 +345,20 @@ class BollaCreateView(LoginRequiredMixin, CreateView):
         form = super().get_form(*args, **kwargs)
         user = self.request.user
         if hasattr(user, 'zona'):
-            # L'utente ha una zona: Mostra solo i clienti della zona
             form.fields['cliente'].queryset = Cliente.objects.filter(zona=user.zona).exclude(
-            tipo_documento_predefinito__nome="NTV")
+            tipo_documento_predefinito__nome="NTV").order_by("tipo_documento_predefinito__nome")
         elif hasattr(user, 'concessionario'):
-            # L'utente ha un concessionario: Mostra tutti i clienti del concessionario
             form.fields['cliente'].queryset = Cliente.objects.filter(concessionario=user.concessionario).exclude(
-            tipo_documento_predefinito__nome="NTV")
+            tipo_documento_predefinito__nome="NTV").order_by("tipo_documento_predefinito__nome")
         else:
             # L'utente non ha né zona né concessionario: Negare l'accesso
-            form.fields['cliente'].queryset = Cliente.objects.none()
             messages.error(self.request, "Non hai i permessi per creare una bolla.")
             self.success_url = reverse_lazy('bolle-list')
 
         form.fields['cliente'].label = "Tipo Bolla e Cliente:"
         form.fields['note'].label = "Eventuali Note:"
         form.fields['note'].widget.attrs.update({
+            'rows':1,
             'maxlength':'255',
             'placeholder': 'Inserisci eventuali note. Per far si che questa bolla venga contata nel conto del giorno dopo quello attuale inserire "conto domani".'
         })
@@ -773,6 +771,7 @@ class CaricoCreateView(LoginRequiredMixin, CreateView):
         form.fields['fornitore'].queryset = Fornitore.objects.all()
         form.fields['fornitore'].initial = form.fields['fornitore'].queryset.first()
         form.fields['zona'].initial = form.fields['zona'].queryset.first()
+        form.fields['note'].widget.attrs.update({"rows":1})
         return form
 
     def get_success_url(self):
@@ -926,7 +925,7 @@ class ResoCreateView(LoginRequiredMixin, CreateView):
             self.success_url = reverse_lazy('home')
 
         form.fields['zona'].initial = form.fields['zona'].queryset.first()
-
+        form.fields['note'].widget.attrs.update({"rows":1})
         return form
 
     def get_success_url(self):
