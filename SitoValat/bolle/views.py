@@ -1824,19 +1824,28 @@ class FatturaDeleteView(DeleteView):
 
     def post(self, request, *args, **kwargs):
         fattura = self.get_object()
-        tipo_fattura = fattura.tipo_fattura
+        user = self.request.user
 
-        # Controlla se la bolla è l'ultima
-        ultima_fattura = Fattura.objects.filter(tipo_fattura=tipo_fattura).order_by('-numero').first()
-        if fattura != ultima_fattura:
+        # Trova il concessionario (per aggiornare i tipi documento di quel concessionario)
+        if hasattr(user, 'zona'):
+            zona = user.zona
+            concessionario = zona.concessionario
+        else:
+            concessionario = user.concessionario
+        tipo_fattura = fattura.tipo_fattura
+        ultimo_numero = tipo_fattura.ultimo_numero
+        #perchè int() ? Perchè fattura.numero è una stringa invece ultimo_numero no
+        print(fattura.numero)
+        print(ultimo_numero)
+        if int(fattura.numero) != ultimo_numero:
             messages.error(request, "Puoi eliminare solo l'ultima fattura del tipo fattura.")
             return redirect('fatture-list')
 
-        # Decrementa l'ultimo numero del tipo documento
         anno_fatt = fattura.data.year
-        tipi_fattura = TipoFattura.objects.filter(anno=anno_fatt)
+        tipi_fattura = TipoFattura.objects.filter(anno=anno_fatt, concessionario=concessionario)
+
         for tipo_fatt in tipi_fattura:
-            tipo_fatt.ultimo_numero -= 1
+            tipo_fatt.ultimo_numero = tipo_fatt.ultimo_numero - 1
             tipo_fatt.save()
 
         # DEBUG print(f"Tipo documento aggiornato: {tipo_documento.nome}, ultimo numero: {tipo_documento.ultimo_numero}")
