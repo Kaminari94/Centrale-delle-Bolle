@@ -5,6 +5,7 @@ from django.views.generic import TemplateView, ListView, DetailView
 from django.views.generic import DeleteView, UpdateView, CreateView
 from django.contrib.auth.views import LoginView
 from django.contrib.auth import user_logged_in
+from decimal import Decimal
 from .models import *
 import fitz
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -32,6 +33,9 @@ from django.utils import timezone
 from django.conf import settings
 from .utils import centrale_fattura
 from .utils.gen_pdf_bolla import genera_pdf_bolla
+
+def ensure_aware(dt, tz):
+    return dt if timezone.is_aware(dt) else timezone.make_aware(dt, tz)
 
 class HomePageView(TemplateView):
     template_name = 'bolle/homepage.html'
@@ -334,7 +338,7 @@ class BollaUpdateView(LoginRequiredMixin, UpdateView):
         elif 'confirm' in request.POST:
             # Conferma la modifica e salva la bolla
             return redirect('bolle-list')
-        return super().post(request, *args, *kwargs)
+        return super().post(request, *args, **kwargs)
 
 class BollaCreateView(LoginRequiredMixin, CreateView):
     model = Bolla
@@ -593,7 +597,7 @@ class ExportBolleView(View):
         data_inizio_str = " ".join(data_inizio_str.split(" ")[1:])
 
         data_fine_str = " ".join(data_fine_str.split(" ")[1:])
-
+        tz = timezone.get_current_timezone()
         # Convertiamo a datetime
         if data_inizio_str:
             data_inizio = datetime.strptime(data_inizio_str, "%d %m %Y %H:%M")
@@ -607,6 +611,8 @@ class ExportBolleView(View):
         else:
             data_fine = now().replace(hour=23, minute=59, second=59, microsecond=999999)
 
+        data_inizio = ensure_aware(data_inizio, tz)
+        data_fine = ensure_aware(data_fine, tz)
         # Verifica se le date sono valide
         if not data_inizio or not data_fine or data_inizio > data_fine:
             messages.error(request, "Errore: Seleziona un intervallo di date valido.")
@@ -672,24 +678,9 @@ class ExportBolleView(View):
         linee.append("B99                                                                                                                                            ")
         file_name = f"014-CESSIONE-{data.strftime('%y%m%d')}"
         file_path = os.path.join(settings.BASE_DIR, 'temp', file_name)
-        with open(file_path, "w", encoding="utf-8", newline='') as file:
-            for linea in linee:
-                file.write(f"{linea}\r\n")
-            #OLD file.writelines(line + "\n" for line in linee) OLD
-
-        # Ritorna il file come risposta scaricabile
-        response = FileResponse(open(file_path, "rb"), as_attachment=True, filename=file_name)
-
-        # Elimina il file dopo averlo servito
-        def elimina_file_dopo_risposta(response):
-            try:
-                os.remove(file_path)
-            except Exception as e:
-                print(f"Errore durante l'eliminazione del file temporaneo: {e}")
-            return response
-
-        # Collega la funzione di pulizia alla risposta
-        response.closed = elimina_file_dopo_risposta
+        contenuto = "".join(f"{linea}\r\n" for linea in linee)
+        response = HttpResponse(contenuto, content_type="text/plain; charset=utf-8")
+        response['Content-Disposition'] = f'attachment; filename="{file_name}"'
         return response
 
 class CaricoListView(LoginRequiredMixin, ListView):
@@ -2021,7 +2012,7 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
         elif 'confirm' in request.POST:
             # Conferma la modifica e salva la bolla
             return redirect('fatture-list')
-        return super().post(request, *args, *kwargs)
+        return super().post(request, *args, **kwargs)
 
 class FatturaCreateView(LoginRequiredMixin, CreateView):
     model = Fattura
@@ -2096,7 +2087,7 @@ def FatturaStampaView(request, pk):
     pdf_content = base64.b64decode(pdf_content)
     response = HttpResponse(pdf_content, content_type='application/pdf')
     nome = fattura.cliente.nome.replace(" ", "")
-    response['Content-Disposition'] = f'attachment; filename="Fattura-{nome}-N-{fattura.numero}.pdf'
+    response['Content-Disposition'] = f'attachment; filename="Fattura-{nome}-N-{fattura.numero}.pdf"'
     return response
 
 class SchedaTVListView(LoginRequiredMixin, ListView):
