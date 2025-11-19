@@ -36,12 +36,3 @@ Il progetto è stato realizzato per un ambiente produttivo reale ed è in uso qu
 ### Interfaccia utente
 - UI responsive basata su **Bootstrap 5**
 - Template Django personalizzati
-
-## Deploy in produzione
-
-La webapp gira su:
-
-- Raspberry Pi 4 con Linux  
-- Reverse proxy tramite **Nginx**
-- Application server **Gunicorn**
-- Servizio raggiungibile tramite hostname DuckDNS: https://centralebolle.duckdns.org/
