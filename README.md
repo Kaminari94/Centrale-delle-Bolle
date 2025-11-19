@@ -17,27 +17,27 @@ Il progetto è stato realizzato per un ambiente produttivo reale ed è in uso qu
 
 ---
 
-## 🚀 Funzionalità principali
+## Funzionalità principali
 
-### 📄 Gestione DDT e documenti
+### Gestione DDT e documenti
 - Creazione, modifica e archiviazione DDT
 - Ricerca e filtraggio documenti
 - Esportazione dei dati
 
-### 💼 Fatture elettroniche (FatturaPA)
+### Fatture elettroniche (FatturaPA)
 - Generazione XML conforme allo standard FatturaPA
 - Archiviazione e gestione dello storico
 
-### 📊 Reportistica con grafici interattivi
+### Reportistica con grafici interattivi
 - Dashboard con grafici interattivi realizzati con **Plotly**
 - Filtri dinamici (cliente, intervallo temporale, categorie)
 - Visualizzazione vendite, distribuzione articoli e trend operativi
 
-### 🖥️ Interfaccia utente
+### Interfaccia utente
 - UI responsive basata su **Bootstrap 5**
 - Template Django personalizzati
 
-## 🌐 Deploy in produzione
+## Deploy in produzione
 
 La webapp gira su:
 
