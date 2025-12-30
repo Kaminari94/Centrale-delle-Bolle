@@ -147,7 +147,7 @@ def genera_pdf_base64(fattura):
     base64_pdf = base64.b64encode(pdf_data).decode('utf-8')
 
     # Salva il PDF in base64 nel campo del modello
-    fattura.pdf_file = base64_pdf
-    fattura.save()
+    #fattura.pdf_file = base64_pdf
+    #fattura.save()
 
     return base64_pdf

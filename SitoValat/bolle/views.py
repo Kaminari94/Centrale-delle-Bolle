@@ -1493,8 +1493,8 @@ def riepilogo_cls(request):
 def scarica_xml(request, pk):
     fattura = get_object_or_404(Fattura, pk=pk)
     xml_content = genera_fattura_xml(fattura)
-    fattura.xml_file = xml_content
-    fattura.save()
+    #fattura.xml_file = xml_content
+    #fattura.save()
     # DEBUG print(xml_content)
     if not xml_content:
         return HttpResponse("Errore: Nessun file XML da scaricare", status=400)

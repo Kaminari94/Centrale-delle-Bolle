@@ -174,12 +174,12 @@ def genera_fattura_xml(fattura):
         xml.endElement("DettaglioPagamento")
         xml.endElement("DatiPagamento")
     base64 = genera_pdf_base64(fattura)
-    if fattura.pdf_file:
+    if base64:
         xml.startElement("Allegati", {})
         xml.addQuickElement("NomeAttachment", str(fattura.tipo_fattura.descrizione) + " N" + str(fattura.numero)+ ".pdf")
         xml.addQuickElement("FormatoAttachment", "PDF")
         xml.addQuickElement("DescrizioneAttachment", str(fattura.tipo_fattura.descrizione) + " del " + str(fattura.data) + " N. " + str(fattura.numero) + ", emessa da " + str(fattura.concessionario.nome))
-        xml.addQuickElement("Attachment", fattura.pdf_file)
+        xml.addQuickElement("Attachment", base64)
         xml.endElement("Allegati")
 
     xml.endElement("FatturaElettronicaBody")
