@@ -67,7 +67,15 @@ class HomePageView(TemplateView):
                     articoli_list = articoli.strip().split("\n")
                     somma = 0
                     for articolo in articoli_list:
-                        codice, quantita = articolo.split()
+                        parts = articolo.split()
+                        if len(parts) != 2:
+                            context = self.get_context_data()
+                            context['messages'] = [f"Ci sono valori non numerici. Modificare la lista."]
+                            context['articoli_list'] = articoli
+                            context['cliente_selezionato'] = str(cliente.pk)
+                            return render(request, self.template_name, context)
+                        codice, quantita = parts
+
                         quantita = int(quantita)
                         somma += quantita
                     if somma <= 0:
@@ -82,7 +90,7 @@ class HomePageView(TemplateView):
                         tipo_documento=cliente.tipo_documento_predefinito,
                     )
                     bolla.save()
-                    arti = Articolo.objects.all().values_list('nome', flat=True)
+                    arti = set(Articolo.objects.values_list('nome', flat=True))
                     articoli_concessi = ArticoliConcessi.objects.filter(
                         proprietario=cliente.proprietario
                     ).values_list('articolo', flat=True)
@@ -90,7 +98,7 @@ class HomePageView(TemplateView):
                     for articolo in articoli_list:
                         codice, quantita = articolo.split()
                         quantita = int(quantita)
-                        print(codice)
+                        #print(codice)
                         if quantita == 0:
                             continue
 
@@ -108,8 +116,21 @@ class HomePageView(TemplateView):
                             context['articoli_list'] = articoli
                             context['cliente_selezionato'] = str(cliente.pk)
                             tipo_documento = bolla.tipo_documento
-                            tipo_documento.ultimo_numero -= 1
-                            tipo_documento.save()
+                            anno = (bolla.data or timezone.now()).year
+
+                            # Lock & decrement the annual counter
+                            counter = (TipoDocCounter.objects
+                                       .select_for_update()
+                                       .get(tipo=tipo_documento, anno=anno))
+
+                            if counter.ultimo_numero > 0:
+                                counter.ultimo_numero -= 1
+                                counter.save(update_fields=["ultimo_numero"])
+
+                                # Optional cache sync
+                                tipo_documento.ultimo_numero = counter.ultimo_numero
+                                tipo_documento.save(update_fields=["ultimo_numero"])
+
                             bolla.delete()
                             return render(request, self.template_name, context)
                         articolo = Articolo.objects.get(nome=codice)
@@ -119,8 +140,21 @@ class HomePageView(TemplateView):
                             context['articoli_list'] = articoli
                             context['cliente_selezionato'] = str(cliente.pk)
                             tipo_documento = bolla.tipo_documento
-                            tipo_documento.ultimo_numero -= 1
-                            tipo_documento.save()
+                            anno = (bolla.data or timezone.now()).year
+
+                            # Lock & decrement the annual counter
+                            counter = (TipoDocCounter.objects
+                                       .select_for_update()
+                                       .get(tipo=tipo_documento, anno=anno))
+
+                            if counter.ultimo_numero > 0:
+                                counter.ultimo_numero -= 1
+                                counter.save(update_fields=["ultimo_numero"])
+
+                                # Optional cache sync
+                                tipo_documento.ultimo_numero = counter.ultimo_numero
+                                tipo_documento.save(update_fields=["ultimo_numero"])
+
                             bolla.delete()
                             return render(request, self.template_name, context)
 
@@ -253,20 +287,32 @@ class BollaDeleteView(DeleteView):
 
     def post(self, request, *args, **kwargs):
         bolla = self.get_object()
-        tipo_documento = bolla.tipo_documento
+        tipo = bolla.tipo_documento
+        anno = (bolla.data or timezone.now()).year
 
-        # Controlla se la bolla è l'ultima
-        ultima_bolla = Bolla.objects.filter(tipo_documento=tipo_documento).order_by('-numero').first()
-        if bolla != ultima_bolla:
-            messages.error(request, "Puoi eliminare solo l'ultima bolla del tipo documento.")
-            return redirect('bolle-list')
+        with transaction.atomic():
+            counter = (TipoDocCounter.objects
+                       .select_for_update()
+                       .get(tipo=tipo, anno=anno))
 
-        # Decrementa l'ultimo numero del tipo documento
-        tipo_documento.ultimo_numero -= 1
-        tipo_documento.save()
-        # DEBUG print(f"Tipo documento aggiornato: {tipo_documento.nome}, ultimo numero: {tipo_documento.ultimo_numero}")
+            ultima_bolla = (Bolla.objects
+                            .filter(tipo_documento=tipo, data__year=anno)
+                            .order_by('-numero')
+                            .first())
 
-        bolla.delete()
+            if bolla != ultima_bolla:
+                messages.error(request, "Puoi eliminare solo l'ultima bolla di quell'anno per quel tipo documento.")
+                return redirect('bolle-list')
+
+            counter.ultimo_numero -= 1
+            counter.save(update_fields=["ultimo_numero"])
+
+            # cache (optional)
+            tipo_doc = TipoDocumento.objects.select_for_update().get(pk=tipo.pk)
+            tipo_doc.ultimo_numero = counter.ultimo_numero
+            tipo_doc.save(update_fields=["ultimo_numero"])
+
+            bolla.delete()
 
         return redirect(self.success_url)
 
@@ -2308,19 +2354,41 @@ class SchedaTVDeleteView(LoginRequiredMixin, DeleteView):
     def post(self, request, *args, **kwargs):
         scheda = self.get_object()
         tipo_documento = scheda.tipo_documento
+        anno = (scheda.data or timezone.now().date()).year
 
-        # Controlla se la bolla è l'ultima
-        ultima_scheda = SchedaTV.objects.filter(tipo_documento=tipo_documento).order_by('-numero').first()
-        if scheda != ultima_scheda:
-            messages.error(request, "Puoi eliminare solo l'ultima bolla del tipo documento.")
-            return redirect('schedetv-list')
+        with transaction.atomic():
+            # Lock the counter row for this (tipo, anno)
+            try:
+                counter = (TipoDocCounter.objects
+                           .select_for_update()
+                           .get(tipo=tipo_documento, anno=anno))
+            except TipoDocCounter.DoesNotExist:
+                messages.error(request, "Contatore annuale mancante: impossibile eliminare in modo sicuro.")
+                return redirect('schedetv-list')
 
-        # Decrementa l'ultimo numero del tipo documento
-        tipo_documento.ultimo_numero -= 1
-        tipo_documento.save()
-        # DEBUG print(f"Tipo documento aggiornato: {tipo_documento.nome}, ultimo numero: {tipo_documento.ultimo_numero}")
+            # Check it's the last SchedaTV for that tipo AND year
+            ultima_scheda = (SchedaTV.objects
+                             .filter(tipo_documento=tipo_documento, data__year=anno)
+                             .order_by('-numero')
+                             .first())
 
-        scheda.delete()
+            if scheda != ultima_scheda:
+                messages.error(request, "Puoi eliminare solo l'ultima scheda TV di quell'anno per quel tipo documento.")
+                return redirect('schedetv-list')
+
+            # Decrement annual counter (guard against going negative)
+            if counter.ultimo_numero == 0:
+                messages.error(request, "Contatore annuale già a zero: stato incoerente.")
+                return redirect('schedetv-list')
+
+            counter.ultimo_numero -= 1
+            counter.save(update_fields=["ultimo_numero"])
+
+            # Optional: keep cached field on TipoDocumento aligned
+            tipo_documento.ultimo_numero = counter.ultimo_numero
+            tipo_documento.save(update_fields=["ultimo_numero"])
+
+            scheda.delete()
 
         return redirect(self.success_url)
 

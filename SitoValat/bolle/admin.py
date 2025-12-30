@@ -28,6 +28,10 @@ class ConcessionarioAdmin(admin.ModelAdmin):
 class TipoDocumentoAdmin(admin.ModelAdmin):
     list_display = ('nome', 'descrizione', 'ultimo_numero')
 
+@admin.register(TipoDocCounter)
+class TipoDocCounterAdmin(admin.ModelAdmin):
+    list_display = ('tipo', 'anno', 'ultimo_numero')
+
 @admin.register(Fornitore)
 class FornitoreAdmin(admin.ModelAdmin):
     list_display = ('nome', 'telefono', 'partita_iva')

@@ -64,7 +64,6 @@ class Categoria(models.Model):
 
     def __str__(self):
         return self.nome
-from django.db import models
 
 class Cliente(models.Model):
     IGNORA = [
@@ -139,7 +138,23 @@ class TipoDocumento(models.Model):
     ultimo_numero = models.PositiveIntegerField(default=0)
     concessionario = models.ForeignKey('Concessionario', on_delete=models.CASCADE)
     def __str__(self):
-        return self.nome
+        return self.nome + " " + self.concessionario.nome
+
+class TipoDocCounter(models.Model):
+    tipo = models.ForeignKey(TipoDocumento, on_delete=models.CASCADE, related_name="counters")
+    anno = models.PositiveIntegerField()
+    ultimo_numero = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tipo", "anno"],
+                name="uniq_counter_tipo_anno",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.tipo.nome} {self.tipo.concessionario.nome}, anno: {self.anno} ultimo: {self.ultimo_numero}"
 
 class Bolla(models.Model):
     cliente = models.ForeignKey('Cliente', on_delete=models.CASCADE)  # Cliente associato
@@ -151,11 +166,24 @@ class Bolla(models.Model):
     def save(self, *args, **kwargs):
         skip_auto_number = kwargs.pop('skip_auto_number', False)  # Recuperiamo il flag, DA PROVARE
         if not self.id and not skip_auto_number:  # Controlla se la bolla è nuova
-            with transaction.atomic():  # Blocca la transazione per garantire unicità
-                tipo_doc = self.tipo_documento
-                tipo_doc.ultimo_numero += 1  # Incrementa l'ultimo numero per il tipo di documento
-                self.numero = tipo_doc.ultimo_numero
-                tipo_doc.save()  # Salva il nuovo ultimo numero
+            with transaction.atomic():
+                anno_obb = (self.data or timezone.now()).year
+
+                counter, _ = (TipoDocCounter.objects
+                .select_for_update()
+                .get_or_create(
+                    tipo=self.tipo_documento,
+                    anno=anno_obb,
+                    defaults={"ultimo_numero": 0}
+                ))
+
+                counter.ultimo_numero += 1
+                self.numero = counter.ultimo_numero
+                counter.save(update_fields=["ultimo_numero"])
+                tipo_doc = TipoDocumento.objects.select_for_update().get(pk=self.tipo_documento.pk)
+                tipo_doc.ultimo_numero = counter.ultimo_numero
+                tipo_doc.save(update_fields=["ultimo_numero"])
+
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -323,16 +351,20 @@ class Fattura(models.Model):
         self.save()  # Salva la fattura con i nuovi totali
 
     def save(self, *args, **kwargs):
-        skip_auto_number = False
-        if not self.id and not skip_auto_number:  # Controlla se la fattura è nuova
-            with transaction.atomic():  # Blocca la transazione per garantire unicità
+        if not self.id:
+            with transaction.atomic():
                 anno_fatt = self.data.year
-                tipi_fattura = TipoFattura.objects.filter(anno=anno_fatt)
-                nuovo_numero = self.tipo_fattura.ultimo_numero + 1  # Incrementa l'ultimo numero fattura
-                for tipo_fatt in tipi_fattura:
-                    tipo_fatt.ultimo_numero = nuovo_numero
-                    tipo_fatt.save()  # Salva il nuovo ultimo numero
-                self.numero = nuovo_numero
+
+                qs = (TipoFattura.objects
+                      .select_for_update()
+                      .filter(concessionario=self.concessionario, anno=anno_fatt))
+
+                current = qs.aggregate(m=models.Max("ultimo_numero"))["m"] or 0
+                nuovo_numero = current + 1
+
+                qs.update(ultimo_numero=nuovo_numero)
+                self.numero = str(nuovo_numero)
+
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -375,12 +407,21 @@ class SchedaTV(models.Model):
     numero = models.PositiveIntegerField()
 
     def save(self, *args, **kwargs):
-        if not self.id:  # Controlla se la bolla è nuova
-            with transaction.atomic():  # Blocca la transazione per garantire unicità
-                tipo_doc = self.tipo_documento
-                tipo_doc.ultimo_numero += 1  # Incrementa l'ultimo numero per il tipo di documento
-                self.numero = tipo_doc.ultimo_numero
-                tipo_doc.save()  # Salva il nuovo ultimo numero
+        if not self.id:
+            with transaction.atomic():
+                anno_obb = (self.data or timezone.now().date()).year
+
+                counter, _ = (TipoDocCounter.objects
+                .select_for_update()
+                .get_or_create(
+                    tipo=self.tipo_documento,
+                    anno=anno_obb,
+                    defaults={"ultimo_numero": 0}
+                ))
+                counter.ultimo_numero += 1
+                self.numero = counter.ultimo_numero
+                counter.save(update_fields=["ultimo_numero"])
+
         super().save(*args, **kwargs)
 
     def __str__(self):
