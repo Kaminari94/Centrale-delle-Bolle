@@ -434,6 +434,7 @@ class RigaBollaDeleteView(DeleteView):
         return reverse('bolla-update', kwargs={'pk':bolla_id})
 
 class BollaStampaView(DetailView):
+
     model = Bolla
     template_name = "bolle/bolla_stampa.html"
 
