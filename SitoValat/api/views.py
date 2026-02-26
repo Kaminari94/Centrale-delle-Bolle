@@ -6,10 +6,11 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from bolle.models import Bolla, Cliente, Articolo, RigaBolla, RigaCarico, ArticoliConcessi
+from bolle.models import Bolla, Cliente, Articolo, TipoDocumento, TipoDocCounter, Zona, RigaBolla, RigaCarico, ArticoliConcessi, Carico, Reso, RigaCarico, RigaReso
 from .serializers import BollaListSerializer, BollaDetailSerializer, CustomerMiniSerializer
 from .receipts.renderer import render_ddt
-
+from django.core.exceptions import ValidationError
+from rest_framework import status
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
@@ -163,7 +164,6 @@ def customers_list(request):
     data = CustomerMiniSerializer(qs, many=True).data
     return Response({"count": len(data), "results": data})
 
-from rest_framework import status
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -313,5 +313,256 @@ def bolle_quick_create(request):
         # qui NON stampo solo: torno un errore API utile
         return Response(
             {"detail": f"Errore durante la creazione della bolla veloce: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def movim_quick_create(request):
+    """
+    POST /api/movim/
+    Body JSON:
+      {
+        "type": "Carico" (oppure "Reso"),
+        "numero": "S1V000...", //Solo carico
+        "raw_lines": "127 5 160426\n128 2 160426\n..." (oppure caso Reso: "127 5\n128 2\n...")
+      }
+
+    Success:
+      201 { "type": "carico"/"reso", "mov_id": 123 }
+
+    Validation error:
+      400 { "errors": [ { "line": 2, "message": "..." }, ... ] }
+    """
+    mov_type = request.data.get("type") # Rinominato per evitare conflitto con la keyword 'type'
+    numero = request.data.get("numero") if mov_type == "Carico" else None
+    raw_lines = request.data.get("raw_lines", "")
+    user = request.user
+
+    if mov_type is None:
+        return Response({"detail": "Campo 'type' mancante."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if mov_type not in ["Carico", "Reso"]:
+        return Response({"detail": "Campo 'type' non valido. Deve essere 'Carico' o 'Reso'."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if mov_type == "Carico" and not numero:
+        return Response({"detail": "Campo 'numero' mancante per il tipo 'Carico'."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not isinstance(raw_lines, str) or not raw_lines.strip():
+        return Response({"detail": "Campo 'raw_lines' vuoto o non valido."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # ---- 1) Parsing righe + controlli di base  ----
+    lines = [ln.strip() for ln in raw_lines.strip().split("\n") if ln.strip()]
+    errors = []
+    parsed = []  # lista di dict: {line, codice_raw, codice_norm, quantita, lotto (opzionale)}
+
+    somma = 0
+    for idx, ln in enumerate(lines, start=1):
+        parts = ln.split()
+        codice_raw = None
+        q_raw = None
+        lotto = None # Inizializza lotto a None
+
+        if mov_type == "Carico":
+            if len(parts) != 3:
+                errors.append({"line": idx, "message": "Formato non valido per Carico. Usa: CODICE QUANTITÀ LOTTO"})
+                continue
+            codice_raw, q_raw, lotto = parts[0], parts[1], parts[2]
+        elif mov_type == "Reso":
+            if len(parts) != 2:
+                errors.append({"line": idx, "message": "Formato non valido per Reso. Usa: CODICE QUANTITÀ"})
+                continue
+            codice_raw, q_raw = parts[0], parts[1]
+
+        try:
+            quantita = int(q_raw)
+            if quantita <= 0:
+                errors.append({"line": idx, "message": "Quantità deve essere maggiore di zero."})
+                continue
+        except (ValueError, TypeError):
+            errors.append({"line": idx, "message": "Quantità non numerica o non valida."})
+            continue
+
+        somma += quantita
+        codice_norm = _normalize_codice(codice_raw)
+
+        item_data = {
+            "line": idx,
+            "codice_raw": codice_raw,
+            "codice": codice_norm,
+            "quantita": quantita,
+        }
+        if mov_type == "Carico":
+            item_data["lotto"] = lotto # Aggiungi lotto solo se è un Carico
+        parsed.append(item_data)
+
+
+    if errors:
+        return Response({"errors": errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    if somma <= 0:
+        return Response(
+            {"errors": [{"line": 0, "message": "La somma delle quantità deve essere maggiore di zero."}]},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # ---- 3) Validazioni “di dominio”: articolo esiste ----
+    # (A) Preparo set codici richiesti (skip quantita==0 già gestito sopra con quantita > 0)
+    richiesti = {p["codice"] for p in parsed}
+
+    # (B) Carico tutti gli articoli in 1 query
+    articoli_map = {a.nome: a for a in Articolo.objects.filter(nome__in=richiesti)}
+
+    # (C) Check “esiste”
+    for p in parsed:
+        articolo = articoli_map.get(p["codice"])
+        if articolo is None:
+            errors.append({"line": p["line"], "message": f"Articolo non trovato: {p['codice']}."})
+            continue
+
+    if errors:
+        return Response({"errors": errors}, status=status.HTTP_400_BAD_REQUEST)
+
+
+    # Recupera concessionario e zona dell'utente
+    user_conc = getattr(user, "concessionario", None)
+    user_zona = getattr(user, "zona", None) if not user_conc else Zona.objects.filter(concessionario=user_conc).first()
+    # print(user_zona)
+
+    # Determina la zona e il fornitore (se Carico)
+    zona_movimento = None
+    fornitore_carico = None
+
+    if user_zona:
+        zona_movimento = user_zona
+        fornitore_carico = user_zona.concessionario.cons_conto
+        # print(zona_movimento, fornitore_carico)
+    elif user_conc:
+        qs = Zona.objects.filter(concessionario=user_conc)
+        if hasattr(user_conc, 'zona') and user_conc.zona:
+            zona_movimento = qs.first()
+        if hasattr(user_conc, 'cons_conto') and user_conc.cons_conto:
+            fornitore_carico = user_conc.cons_conto
+    else:
+        # Gestire il caso in cui l'utente non ha né zona né concessionario
+        return Response(
+            {"detail": "L'utente non è associato a una zona o un concessionario valido per effettuare movimenti."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    if not zona_movimento:
+         return Response(
+            {"detail": "Impossibile determinare la zona per il movimento dall'utente corrente."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # ---- 4) Creazione movimento + righe in transazione ----
+    try:
+        with transaction.atomic():
+            if mov_type == "Carico":
+                if not fornitore_carico:
+                     return Response(
+                        {"detail": "Impossibile determinare il fornitore per il Carico dall'utente corrente."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                movimento = Carico.objects.create(
+                    data=datetime.now(),
+                    zona=zona_movimento,
+                    fornitore=fornitore_carico,
+                    numero=numero,
+                )
+            else: # Reso
+                movimento = Reso.objects.create(
+                    data=datetime.now(),
+                    zona=zona_movimento,
+                )
+
+            for p in parsed:
+                # Quantità <= 0 è già stata gestita nel parsing, quindi qui non serve il controllo
+                articolo_obj = articoli_map[p["codice"]] # Recupera l'oggetto Articolo
+
+                if mov_type == "Carico":
+                    RigaCarico.objects.create(
+                        carico=movimento,
+                        articolo=articolo_obj,
+                        quantita=p["quantita"],
+                        lotto=p.get("lotto", "---"), # Usa p["lotto"] con fallback
+                    )
+                else: # Reso
+                    RigaReso.objects.create(
+                        reso=movimento,
+                        articolo=articolo_obj,
+                        quantita=p["quantita"],
+                    )
+
+            if mov_type == "Carico":
+                return Response({"type": "carico", "mov_id": movimento.pk}, status=status.HTTP_201_CREATED)
+            else:
+                return Response({"type": "reso", "mov_id": movimento.pk}, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        # È buona pratica loggare l'errore completo per debug
+        # import logging
+        # logging.exception("Errore durante la creazione del movimento veloce")
+        return Response(
+            {"detail": f"Errore interno durante la creazione del movimento: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(["DELETE"])  # <-- 1. Cambiato a DELETE
+@permission_classes([IsAuthenticated])
+def delete_view(request, pk: int):
+    """
+    DELETE /api/bolle/<id>/
+
+    Success:
+      204 No Content
+
+    Validation error:
+      400 { "detail": "Non puoi eliminare una bolla se non è l'ultima creata." }
+
+    Not Found:
+      404 { "detail": "Not found." }
+    """
+
+    qs = _apply_user_scope(Bolla.objects.all(), request.user)
+    bolla = get_object_or_404(qs, pk=pk)
+    tipo = bolla.tipo_documento
+    anno = bolla.data.year
+
+    try:
+        counter = (TipoDocCounter.objects
+                   .select_for_update()
+                   .get(tipo=tipo, anno=anno))
+
+        ultima_bolla = (Bolla.objects
+                        .filter(tipo_documento=tipo, data__year=anno)
+                        .order_by('-numero')
+                        .first())
+
+        if bolla != ultima_bolla:
+            return Response({"detail": str("Puoi eliminare solo l'ultima bolla di quell'anno per quel tipo documento.")}, status=status.HTTP_400_BAD_REQUEST)
+
+        counter.ultimo_numero -= 1
+        counter.save(update_fields=["ultimo_numero"])
+
+        # cache (optional)
+        tipo_doc = TipoDocumento.objects.select_for_update().get(pk=tipo.pk)
+        tipo_doc.ultimo_numero = counter.ultimo_numero
+        tipo_doc.save(update_fields=["ultimo_numero"])
+
+        bolla.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    except ValidationError as e:
+        # 3. Gestione di un'eccezione specifica per la regola di business
+        # 2. Codice di errore corretto (400)
+        return Response({"detail": str(e.message)}, status=status.HTTP_400_BAD_REQUEST)
+
+    except Exception as e:
+        # Gestione per tutti gli altri errori imprevisti
+        return Response(
+            {"detail": "Si è verificato un errore interno durante l'eliminazione."},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
