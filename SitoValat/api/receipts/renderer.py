@@ -6,6 +6,7 @@ from .formatters import (
     BOLD_ON,
     BOLD_OFF,
 )
+from django.utils import timezone
 
 def pad_right(s, n):
     s = "" if s is None else str(s)
@@ -149,7 +150,9 @@ def render_ddt(bolla):
     numero = getattr(bolla, "numero", "")
     tipo_descr = getattr(bolla.tipo_documento, "descrizione", "") or ""
     data = getattr(bolla, "data", None)
-    data_str = data.strftime("%d/%m/%Y %H:%M") if data else ""
+    
+    # Convertiamo in local time prima di formattare
+    data_str = timezone.localtime(data).strftime("%d/%m/%Y %H:%M") if data else ""
 
     if is_cls:
         # SX: Bolla N°, Tipo, Data
