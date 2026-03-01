@@ -566,3 +566,144 @@ def delete_view(request, pk: int):
             {"detail": "Si è verificato un errore interno durante l'eliminazione."},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def modifica_righe(request, pk: int):
+    """
+    POST /api/bolle/<id>/modifica/
+    Body JSON:
+      {
+        "raw_lines": "127 5\n128 2\n..."
+      }
+    
+    Sostituisce COMPLETAMENTE le righe della bolla con quelle fornite.
+    Mantiene i lotti esistenti per gli articoli già presenti.
+    """
+    raw_lines = request.data.get("raw_lines", "")
+    
+    if not isinstance(raw_lines, str):
+        return Response({"detail": "raw_lines deve essere una stringa"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # 1. Recupero la bolla esistente (con scope utente)
+    qs = _apply_user_scope(Bolla.objects.all(), request.user)
+    bolla = get_object_or_404(qs, pk=pk)
+    cliente = bolla.cliente # Serve per i controlli sui permessi articoli
+
+    # 2. Mappatura Lotti Esistenti (Articolo -> Lotto)
+    # Serve per preservare il lotto originale se l'articolo è ancora presente
+    existing_lots = {}
+    for r in bolla.righe.all():
+        # Usiamo il nome dell'articolo (codice) come chiave
+        existing_lots[r.articolo.nome] = r.lotto
+
+    # 3. Parsing righe (identico a quick_create)
+    lines = [ln.strip() for ln in raw_lines.strip().split("\n") if ln.strip()]
+    errors = []
+    parsed = [] 
+
+    somma = 0
+    for idx, ln in enumerate(lines, start=1):
+        parts = ln.split()
+        if len(parts) != 2:
+            errors.append({"line": idx, "message": "Formato non valido. Usa: CODICE QUANTITÀ"})
+            continue
+
+        codice_raw, q_raw = parts[0], parts[1]
+
+        try:
+            quantita = int(q_raw)
+        except ValueError:
+            errors.append({"line": idx, "message": "Quantità non numerica"})
+            continue
+
+        somma += quantita
+        codice_norm = _normalize_codice(codice_raw)
+
+        parsed.append({
+            "line": idx,
+            "codice_raw": codice_raw,
+            "codice": codice_norm,
+            "quantita": quantita,
+        })
+
+    if errors:
+        return Response({"errors": errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    if somma <= 0 and len(parsed) > 0:
+         # Nota: se parsed è vuoto, vuol dire che l'utente vuole cancellare tutto. 
+         # Se non è vuoto ma somma è 0, è un errore.
+        return Response(
+            {"errors": [{"line": 0, "message": "Somma delle quantità minore o uguale a zero"}]},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # 4. Validazioni di dominio (Articoli esistono? Sono concessi?)
+    richiesti = {p["codice"] for p in parsed if p["quantita"] != 0}
+    articoli_map = {a.nome: a for a in Articolo.objects.filter(nome__in=richiesti)}
+    
+    concessi_ids = set(
+        ArticoliConcessi.objects
+        .filter(proprietario=cliente.proprietario)
+        .values_list("articolo", flat=True)
+    )
+
+    for p in parsed:
+        if p["quantita"] == 0:
+            continue
+
+        articolo = articoli_map.get(p["codice"])
+        if articolo is None:
+            errors.append({"line": p["line"], "message": f"Articolo errato: {p['codice']}."})
+            continue
+
+        if articolo.pk not in concessi_ids:
+            errors.append({
+                "line": p["line"],
+                "message": f"Articolo {p['codice']} non concesso a {cliente.nome}."
+            })
+
+    if errors:
+        return Response({"errors": errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    # 5. Sostituzione Righe (Atomica)
+    try:
+        with transaction.atomic():
+            # A. Cancella TUTTE le righe esistenti
+            bolla.righe.all().delete()
+
+            # B. Crea le nuove righe
+            for p in parsed:
+                if p["quantita"] == 0:
+                    continue
+
+                articolo = articoli_map[p["codice"]]
+
+                # LOGICA LOTTO:
+                # Se l'articolo c'era già, usa il vecchio lotto.
+                # Altrimenti, calcola l'ultimo carico disponibile.
+                if p["codice"] in existing_lots:
+                    lotto = existing_lots[p["codice"]]
+                else:
+                    ultimo_carico = (
+                        RigaCarico.objects
+                        .filter(articolo=articolo)
+                        .order_by("-carico__data")
+                        .first()
+                    )
+                    lotto = ultimo_carico.lotto if ultimo_carico else "---"
+
+                RigaBolla.objects.create(
+                    bolla=bolla,
+                    articolo=articolo,
+                    quantita=p["quantita"],
+                    lotto=lotto,
+                )
+
+        return Response({"type": "updated", "bolla_id": bolla.pk, "rows_count": len(parsed)}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response(
+            {"detail": f"Errore durante l'aggiornamento delle righe: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

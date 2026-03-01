@@ -7,6 +7,7 @@ urlpatterns = [
     # bolle
     path("bolle/", views.bolle_list, name="api_bolle_list"),
     path("bolle/<int:pk>/", views.bolle_detail, name="api_bolle_detail"),
+    path('bolle/<int:pk>/modifica/', views.modifica_righe, name='api_modifica'),
     path("bolle/<int:pk>/receipt/", views.receipt_view, name="api_receipt"),
     path("bolle/<int:pk>/elimina/", views.delete_view, name="api_delete"),
     path("customers/", views.customers_list),
