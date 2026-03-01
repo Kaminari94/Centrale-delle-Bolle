@@ -152,7 +152,7 @@ def customers_list(request):
     # (opzionale) escludi NTV come fai tu
     qs = qs.exclude(tipo_documento_predefinito__nome="NTV")
     qs = qs.exclude(tipo_documento_predefinito__nome="RF")
-
+    qs = qs.exclude(ignorare=True)
     qs = _apply_customer_scope(qs, request.user)
 
     q = request.query_params.get("q")
