@@ -15,11 +15,12 @@ class RigaBollaSerializer(serializers.ModelSerializer):
 class BollaListSerializer(serializers.ModelSerializer):
     cliente_nome = serializers.CharField(source="cliente.nome", read_only=True)
     cliente_via = serializers.CharField(source="cliente.via", read_only=True)
+    cliente_codice = serializers.CharField(source="cliente.codice", read_only=True)
     tipo_documento_nome = serializers.CharField(source="tipo_documento.nome", read_only=True)
 
     class Meta:
         model = Bolla
-        fields = ["id", "numero", "data", "cliente_nome", "cliente_via", "tipo_documento_nome"]
+        fields = ["id", "numero", "data", "cliente_nome", "cliente_via", "cliente_codice", "tipo_documento_nome"]
 
 
 class BollaDetailSerializer(serializers.ModelSerializer):
