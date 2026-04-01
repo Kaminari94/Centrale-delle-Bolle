@@ -1504,7 +1504,8 @@ def scarica_xml(request, pk):
     response = HttpResponse(xml_content, content_type='application/xml')
     nome = fattura.cliente.nome.replace(" ", "")
     tipo = fattura.tipo_fattura.descrizione.replace(" ", "")
-    numero = (str(fattura.data.year)[-2:] + str(fattura.numero).zfill(3))
+    esad = str(hex(int(fattura.numero))).replace("0x", "")
+    numero = (str(fattura.data.year)[-2:] + esad.zfill(3))
     response['Content-Disposition'] = f'attachment; filename="IT{fattura.concessionario.partita_iva}_{numero}.xml"'
     return response
 
@@ -1646,7 +1647,8 @@ def scarica_tutte_xml(request):
             if xml_content:
                 nome = fattura.cliente.nome.replace(" ", "")
                 tipo = fattura.tipo_fattura.descrizione.replace(" ", "")
-                numero = (str(fattura.data.year)[-2:] + str(fattura.numero).zfill(3))
+                esad = str(hex(int(fattura.numero))).replace("0x", "")
+                numero = (str(fattura.data.year)[-2:] + esad.zfill(3))
                 file_name = f"IT{fattura.concessionario.partita_iva}_{numero}.xml"
                 zip_file.writestr(file_name, xml_content)
 
