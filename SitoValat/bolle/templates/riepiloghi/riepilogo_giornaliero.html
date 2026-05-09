@@ -50,6 +50,7 @@
     </thead>
     <tbody>
         {% for codice, articolo in riepilogo.items %}
+        {% if not articolo.quantita_venduta == 0 %}
         <tr>
             <td><strong>{{ articolo.nome }}</strong></td>
             <td>{{ articolo.reso_prec }}</td>
@@ -62,6 +63,7 @@
             <td>{{ articolo.quantita_venduta }}</td>
             <td>€ {{ articolo.tot_euro }}</td>
         </tr>
+        {% endif %}
         {% endfor %}
         <tr>
             <td colspan="9"><strong>Totale</strong></td>

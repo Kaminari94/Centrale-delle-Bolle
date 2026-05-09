@@ -23,6 +23,7 @@ from django.views import View
 from django.core.files.storage import default_storage
 from .utils.genera_pdf import genera_pdf_base64
 from .utils.parser import parse_file
+from .utils.riepilogo import calcola_riep_giornaliero
 from django.utils.dateparse import parse_date
 from pdfminer.high_level import extract_text
 from django.http import FileResponse
@@ -1086,164 +1087,114 @@ def menu_riepiloghi(request):
 from django.template.defaultfilters import date as _date
 
 def riepilogo_giornaliero(request):
-    data_giorno = request.GET.get('data_giorno')  # Ottieni la data dalla query string
-    zona_id = request.GET.get('zona')  # Ottieni la zona dalla query string
+    dati = calcola_riep_giornaliero(request)
+    riep = dati["riepilogo"]
 
-    # Se i parametri non sono forniti, gestisci l'errore e manda indietro
-    if not data_giorno or not zona_id:
-        messages.error(request, "Inserire tutti i parametri.")
-        return redirect('menu-riepiloghi')
+    return render(request, 'riepiloghi/riepilogo_giornaliero.html', {'riepilogo': riep, 'totale':format(dati["totale"], ".2f"), 'zona':dati["zona"], 'data_giorno': _date(dati["data"], "Y-m-d"), 'data':_date(dati["data"], "l, d E Y")})
 
-    # Converti la data e verifica che la zona esista
-    data = datetime.strptime(data_giorno, "%Y-%m-%d")
-    data_inizio = datetime.combine(data, datetime.min.time())
-    data_inizio = timezone.make_aware(data_inizio, timezone.get_current_timezone())
-    data_fine = datetime.combine(data, datetime.max.time())
-    data_fine = timezone.make_aware(data_fine, timezone.get_current_timezone())
-    zona = get_object_or_404(Zona, pk=zona_id)
-    giorno_precedente = data - timedelta(days=1)
-
-    carico_giorno_precedente = Carico.objects.filter(data=giorno_precedente, zona=zona)
-    reso_giorno_precedente = Reso.objects.filter(data=giorno_precedente, zona=zona)
-    if not reso_giorno_precedente:
-        reso_giorno_precedente = Reso.objects.filter(data=(giorno_precedente - timedelta(days=1)), zona=zona)
-        if not reso_giorno_precedente:
-            reso_giorno_precedente = Reso.objects.filter(data=(giorno_precedente - timedelta(days=2)), zona=zona)
-    # Rozzo? Si. Ma efficace. Statt zitt.
-    prec_inizio = datetime.combine(giorno_precedente, datetime.min.time()) #devo farlo sempre perchè è una datetime, per il range.
-    prec_inizio = timezone.make_aware(prec_inizio, timezone.get_current_timezone())
-    prec_fine = datetime.combine(giorno_precedente, datetime.max.time())
-    prec_fine = timezone.make_aware(prec_fine, timezone.get_current_timezone())
-    bolle_del_giorno = Bolla.objects.filter(
-        Q(data__range=(data_inizio, data_fine)) |
-        Q(data__range=(prec_inizio, prec_fine), note__icontains="conto domani"),
-        tipo_documento__concessionario=zona.concessionario
-    ).exclude(tipo_documento__nome="RF")
-
-    reso_del_giorno = Reso.objects.filter(data=data, zona=zona)
-
-    articoli = Articolo.objects.all()
-    riepilogo = {}
-    for articolo in articoli:
-        carico_prec = 0
-        reso_prec = 0
-        nome_art = ""
-        carico_totale = 0
-        reso_att = 0
-        bolla_totale = 0
-        quantita_venduta = 0
-        nome_art = articolo.nome
-        carico_prec = RigaCarico.objects.filter(carico__in=carico_giorno_precedente, articolo=articolo).aggregate(Sum("quantita"))['quantita__sum'] or 0
-        reso_prec = RigaReso.objects.filter(reso__in=reso_giorno_precedente, articolo=articolo).aggregate(Sum("quantita"))['quantita__sum'] or 0
-        carico_totale = carico_prec + reso_prec
-        reso_att = (RigaReso.objects.filter(reso__in=reso_del_giorno, articolo=articolo).aggregate(Sum("quantita")))['quantita__sum'] or 0
-        bolla_totale = RigaBolla.objects.filter(bolla__in=bolle_del_giorno, articolo=articolo).aggregate(Sum("quantita"))['quantita__sum'] or 0
-
-        bolla_nt = RigaBolla.objects.filter(bolla__in=bolle_del_giorno, articolo=articolo, bolla__tipo_documento__nome="NT").aggregate(Sum("quantita"))[
-            'quantita__sum'] or 0
-        bolla_cls = RigaBolla.objects.filter(bolla__in=bolle_del_giorno, articolo=articolo, bolla__tipo_documento__nome="CLS").aggregate(Sum("quantita"))[
-            'quantita__sum'] or 0
-        quantita_venduta = carico_totale - bolla_totale - reso_att
-        prezzo = Articolo.objects.filter(nome=nome_art).first().prezzo_ivato
-        tot_euro = float(quantita_venduta * prezzo)
-        if tot_euro == 0:
-            continue
-
-        riepilogo[nome_art] = {
-            "nome" : nome_art,
-            "carico_prec" : carico_prec,
-            "reso_prec" : reso_prec,
-            "carico_tot" : carico_totale,
-            "reso_att" : reso_att,
-            "bolla_nt" : bolla_nt,
-            "bolla_cls" : bolla_cls,
-            "bolla_totale" : bolla_totale,
-            "quantita_venduta" : quantita_venduta,
-            "tot_euro" : format(tot_euro, ".2f")
-        }
-
-    totale = 0
-    for articolo in riepilogo:
-        totale += float(riepilogo[articolo].get("tot_euro"))
-
-    return render(request, 'riepiloghi/riepilogo_giornaliero.html', {'riepilogo': riepilogo, 'totale':format(totale, ".2f"), 'zona':zona, 'data_giorno': _date(data, "Y-m-d"), 'data':_date(data, "l, d E Y")})
+from openpyxl import load_workbook
+from .utils.excel_config import *
 
 def riepilogo_giornaliero_stampa(request):
-    data_giorno = request.GET.get('data_giorno')  # Ottieni la data dalla query string
-    zona_id = request.GET.get('zona')  # Ottieni la zona dalla query string
+    dati = calcola_riep_giornaliero(request)
+    template_path = os.path.join(settings.BASE_DIR, 'bolle', 'utils', "template_conteggio.xlsx")
+    wb = load_workbook(template_path)
+    ws = wb.active
+    giorno = _date(dati["data"], "l, d E Y")
+    ws.title = f"Riepilogo {_date(dati["data"], "Y-m-d")}"
 
-    # Se i parametri non sono forniti, gestisci l'errore e manda indietro
-    if not data_giorno or not zona_id:
-        messages.error(request, "Inserire tutti i parametri.")
-        return redirect('menu-riepiloghi')
+    ws["A1"] = f"Conteggio del {giorno}. Zona {dati["zona"].nome}"
 
-    # Converti la data e verifica che la zona esista
-    data = datetime.strptime(data_giorno, "%Y-%m-%d")
-    data_inizio = datetime.combine(data, datetime.min.time())
-    data_inizio = timezone.make_aware(data_inizio, timezone.get_current_timezone())
-    data_fine = datetime.combine(data, datetime.max.time())
-    data_fine = timezone.make_aware(data_fine, timezone.get_current_timezone())
-    zona = get_object_or_404(Zona, pk=zona_id)
-    giorno_precedente = data - timedelta(days=1)
+    riep = dati["riepilogo"]
+    documenti = dati["documenti"]
 
-    carico_giorno_precedente = Carico.objects.filter(data=giorno_precedente, zona=zona)
-    reso_giorno_precedente = Reso.objects.filter(data=giorno_precedente, zona=zona)
-    if not reso_giorno_precedente:
-        reso_giorno_precedente = Reso.objects.filter(data=(giorno_precedente - timedelta(days=1)), zona=zona)
-        if not reso_giorno_precedente:
-            reso_giorno_precedente = Reso.objects.filter(data=(giorno_precedente - timedelta(days=2)), zona=zona)
-    # Rozzo? Si. Ma efficace. Statt zitt.
+    #STRUTTURA DATI riepilogo Per cosa usiamo riepilogo qui? Per carico e reso
+    #riepilogo[nome_art] = {
+    #    "nome": nome_art,
+    #    "carico_prec": carico_prec,
+    #    "reso_prec": reso_prec,
+    #    "carico_tot": carico_totale,
+    #    "reso_att": reso_att,
+    #    "bolla_nt": bolla_nt,
+    #    "bolla_cls": bolla_cls,
+    #    "bolla_totale": bolla_totale,
+    #    "quantita_venduta": quantita_venduta,
+    #    "tot_euro": format(tot_euro, ".2f")
+    #}
 
-    bolle_del_giorno = Bolla.objects.filter(data__range=(data_inizio, data_fine),
-                                            tipo_documento__concessionario=zona.concessionario).exclude(
-        tipo_documento__nome="RF")
-    reso_del_giorno = Reso.objects.filter(data=data, zona=zona)
-
-    articoli = Articolo.objects.all()
-    riepilogo = {}
-    for articolo in articoli:
-        carico_prec = 0
-        reso_prec = 0
-        nome_art = ""
-        carico_totale = 0
-        reso_att = 0
-        bolla_totale = 0
-        quantita_venduta = 0
-        nome_art = articolo.nome
-        carico_prec = RigaCarico.objects.filter(carico__in=carico_giorno_precedente, articolo=articolo).aggregate(Sum("quantita"))['quantita__sum'] or 0
-        reso_prec = RigaReso.objects.filter(reso__in=reso_giorno_precedente, articolo=articolo).aggregate(Sum("quantita"))['quantita__sum'] or 0
-        carico_totale = carico_prec + reso_prec
-        reso_att = (RigaReso.objects.filter(reso__in=reso_del_giorno, articolo=articolo).aggregate(Sum("quantita")))['quantita__sum'] or 0
-        bolla_totale = RigaBolla.objects.filter(bolla__in=bolle_del_giorno, articolo=articolo).aggregate(Sum("quantita"))['quantita__sum'] or 0
-        bolla_nt = RigaBolla.objects.filter(bolla__in=bolle_del_giorno, articolo=articolo, bolla__tipo_documento__nome="NT").aggregate(Sum("quantita"))[
-            'quantita__sum'] or 0
-        bolla_cls = RigaBolla.objects.filter(bolla__in=bolle_del_giorno, articolo=articolo, bolla__tipo_documento__nome="CLS").aggregate(Sum("quantita"))[
-            'quantita__sum'] or 0
-        quantita_venduta = carico_totale - bolla_totale - reso_att
-        prezzo = Articolo.objects.filter(nome=nome_art).first().prezzo_ivato
-        tot_euro = float(quantita_venduta * prezzo)
-        if tot_euro == 0:
+    for articolo, dati in riep.items():
+        articolo = MAPPA_ARTICOLI.get(articolo) if articolo in MAPPA_ARTICOLI else articolo
+        if articolo not in MAPPA_COLONNE:
             continue
+        col = MAPPA_COLONNE[articolo]
 
-        riepilogo[nome_art] = {
-            "nome" : nome_art,
-            "carico_prec" : carico_prec,
-            "reso_prec" : reso_prec,
-            "carico_tot" : carico_totale,
-            "reso_att" : reso_att,
-            "bolla_nt" : bolla_nt,
-            "bolla_cls" : bolla_cls,
-            "bolla_totale" : bolla_totale,
-            "quantita_venduta" : quantita_venduta,
-            "tot_euro" : format(tot_euro, ".2f")
-        }
+        val_reso_prec = ws.cell(row=RIGA_RESO_PREC, column=col).value
+        val_carico_prec = ws.cell(row=RIGA_CARICO_PREC, column=col).value
+        val_reso_att = ws.cell(row=RIGA_RESO_ATT, column=col).value
 
-    totale = 0
-    for articolo in riepilogo:
-        totale += float(riepilogo[articolo].get("tot_euro"))
+        ws.cell(
+            row=RIGA_RESO_PREC,
+            column=col,
+            value=(val_reso_prec + dati["reso_prec"])
+        )
+        ws.cell(
+            row=RIGA_CARICO_PREC,
+            column=col,
+            value=(val_carico_prec + dati["carico_prec"])
+        )
+        ws.cell(
+            row=RIGA_RESO_ATT,
+            column=col,
+            value=(val_reso_att + dati["reso_att"])
+        )
 
-    return render(request, 'riepiloghi/riepilogo_stampa.html', {'riepilogo': riepilogo, 'totale':format(totale, ".2f"), 'zona':zona, 'data':_date(data, "l, d E Y")})
+    riga_cdl = RIGA_CDL
+    riga_nt = RIGA_NT
 
+    for bolla in documenti:
+        cliente = bolla["cliente"]
+        tipo = bolla["tipo"]
+        #print(tipo)
+        righe = bolla["righe"]
+        riga = riga_cdl if tipo == "CLS" else riga_nt
+        ws.cell(
+            row=riga,
+            column=1,
+            value=cliente
+        )
+
+        for r in righe:
+            articolo = r["articolo"]
+
+            articolo = MAPPA_ARTICOLI.get(articolo) if articolo in MAPPA_ARTICOLI else articolo
+            quantita = r["quantita"]
+
+            if articolo not in MAPPA_COLONNE:
+                continue
+            col = MAPPA_COLONNE[articolo]
+            valore = ws.cell(row=riga, column=col).value
+            ws.cell(
+                row=riga,
+                column=col,
+                value=(valore + int(quantita))
+            )
+
+        if tipo == "CLS":
+            riga_cdl += 1
+        else:
+            riga_nt += 1
+
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    response["Content-Disposition"] = (
+        'attachment; filename="conteggio.xlsx"'
+    )
+
+    wb.save(response)
+
+    return response
 
 from django import forms
 from django.http import HttpResponse
