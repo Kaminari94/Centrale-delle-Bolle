@@ -1103,8 +1103,8 @@ def riepilogo_giornaliero_stampa(request):
     giorno = _date(dati["data"], "l, d E Y")
     titolo = _date(dati["data"], "Y-m-d")
     ws.title = f"Riepilogo {titolo}"
-
-    ws["A1"] = f"Conteggio del {giorno}. Zona {dati["zona"].nome}"
+    zona= dati["zona"].nome
+    ws["A1"] = f"Conteggio del {giorno}. Zona {zona}"
 
     riep = dati["riepilogo"]
     documenti = dati["documenti"]
