@@ -1101,7 +1101,8 @@ def riepilogo_giornaliero_stampa(request):
     wb = load_workbook(template_path)
     ws = wb.active
     giorno = _date(dati["data"], "l, d E Y")
-    ws.title = f"Riepilogo {_date(dati["data"], "Y-m-d")}"
+    titolo = _date(dati["data"], "Y-m-d")
+    ws.title = f"Riepilogo {titolo}"
 
     ws["A1"] = f"Conteggio del {giorno}. Zona {dati["zona"].nome}"
 
