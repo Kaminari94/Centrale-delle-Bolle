@@ -1174,6 +1174,15 @@ def riepilogo_giornaliero_stampa(request):
                 continue
             col = MAPPA_COLONNE[articolo]
             valore = ws.cell(row=riga, column=col).value
+
+            #print(
+            #    "DEBUG:",
+            #    "articolo =", articolo,
+            #    "quantita =", repr(quantita), type(quantita),
+            #    "cella =", ws.cell(row=riga, column=col).coordinate,
+            #    "valore =", repr(valore), type(valore),
+            #)
+
             ws.cell(
                 row=riga,
                 column=col,
