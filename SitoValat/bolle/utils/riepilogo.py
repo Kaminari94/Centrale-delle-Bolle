@@ -1,113 +1,177 @@
+from collections import defaultdict
 from datetime import datetime, timedelta
-from django.db.models import Sum, Q
-from django.shortcuts import get_object_or_404
+from decimal import Decimal
+
+from django.core.exceptions import PermissionDenied
+from django.db.models import Prefetch, Q, Sum
 from django.utils import timezone
-from ..models import Zona, Reso, Carico, Bolla, Articolo, RigaCarico, RigaReso, RigaBolla, ArticoliConcessi, \
-    Proprietario
+
+from ..models import Articolo, Bolla, RigaBolla, RigaCarico, RigaReso, Reso, Zona
+
+
+class ParametriRiepilogoNonValidi(ValueError):
+    pass
+
+
+def _zona_autorizzata(request, zona_id):
+    if not request.user.is_authenticated:
+        raise PermissionDenied
+
+    try:
+        zona = Zona.objects.select_related("concessionario").get(pk=zona_id)
+    except (Zona.DoesNotExist, TypeError, ValueError) as exc:
+        raise ParametriRiepilogoNonValidi("La zona inserita non è valida.") from exc
+
+    if request.user.is_superuser:
+        return zona
+
+    if hasattr(request.user, "zona"):
+        autorizzato = request.user.zona.pk == zona.pk
+    elif hasattr(request.user, "concessionario"):
+        autorizzato = request.user.concessionario.pk == zona.concessionario_id
+    else:
+        autorizzato = False
+
+    if not autorizzato:
+        raise PermissionDenied
+
+    return zona
+
+
+def _totali_per_articolo(queryset):
+    return {
+        riga["articolo_id"]: riga["totale"]
+        for riga in queryset.values("articolo_id").annotate(totale=Sum("quantita"))
+    }
 
 
 def calcola_riep_giornaliero(request):
-    data_giorno = request.GET.get('data_giorno')  # Ottieni la data dalla query string
-    zona_id = request.GET.get('zona')  # Ottieni la zona dalla query string
+    data_giorno = request.GET.get("data_giorno")
+    zona_id = request.GET.get("zona")
 
-    # Se i parametri non sono forniti, gestisci l'errore e manda indietro
     if not data_giorno or not zona_id:
-        print("Nessuna data o nessuna zona. Ma che stai cumbinann")
+        raise ParametriRiepilogoNonValidi("Inserire data e zona.")
 
-    # Converti la data e verifica che la zona esista
-    data = datetime.strptime(data_giorno, "%Y-%m-%d")
-    data_inizio = datetime.combine(data, datetime.min.time())
-    data_inizio = timezone.make_aware(data_inizio, timezone.get_current_timezone())
-    data_fine = datetime.combine(data, datetime.max.time())
-    data_fine = timezone.make_aware(data_fine, timezone.get_current_timezone())
-    zona = get_object_or_404(Zona, pk=zona_id)
-    giorno_precedente = data - timedelta(days=1)
+    try:
+        data = datetime.strptime(data_giorno, "%Y-%m-%d")
+    except (TypeError, ValueError) as exc:
+        raise ParametriRiepilogoNonValidi("La data inserita non è valida.") from exc
 
-    carico_giorno_precedente = Carico.objects.filter(data=giorno_precedente, zona=zona)
-    reso_giorno_precedente = Reso.objects.filter(data=giorno_precedente, zona=zona)
+    zona = _zona_autorizzata(request, zona_id)
+    giorno = data.date()
+    giorno_precedente = giorno - timedelta(days=1)
+    fuso_orario = timezone.get_current_timezone()
 
-    i = 0
-    while not reso_giorno_precedente:
-        reso_giorno_precedente = Reso.objects.filter(data=(giorno_precedente - timedelta(days=i)), zona=zona)
-        if not reso_giorno_precedente:
-            i += 1
+    data_inizio = timezone.make_aware(
+        datetime.combine(giorno, datetime.min.time()), fuso_orario
+    )
+    data_fine = timezone.make_aware(
+        datetime.combine(giorno, datetime.max.time()), fuso_orario
+    )
+    prec_inizio = timezone.make_aware(
+        datetime.combine(giorno_precedente, datetime.min.time()), fuso_orario
+    )
+    prec_fine = timezone.make_aware(
+        datetime.combine(giorno_precedente, datetime.max.time()), fuso_orario
+    )
 
-    #if not reso_giorno_precedente:
-    #    reso_giorno_precedente = Reso.objects.filter(data=(giorno_precedente - timedelta(days=1)), zona=zona)
-    #    if not reso_giorno_precedente:
-    #        reso_giorno_precedente = Reso.objects.filter(data=(giorno_precedente - timedelta(days=2)), zona=zona)
-    # Rozzo? Si. Ma efficace. Statt zitt.
-    prec_inizio = datetime.combine(giorno_precedente, datetime.min.time()) #devo farlo sempre perchè è una datetime, per il range.
-    prec_inizio = timezone.make_aware(prec_inizio, timezone.get_current_timezone())
-    prec_fine = datetime.combine(giorno_precedente, datetime.max.time())
-    prec_fine = timezone.make_aware(prec_fine, timezone.get_current_timezone())
+    ultima_data_reso = (
+        Reso.objects.filter(zona=zona, data__lt=giorno)
+        .order_by("-data")
+        .values_list("data", flat=True)
+        .first()
+    )
 
-    bolle_del_giorno = Bolla.objects.filter(Q(data__range=(data_inizio, data_fine)) |
-        Q(data__range=(prec_inizio, prec_fine), note__icontains="conto domani"),
-        tipo_documento__concessionario=zona.concessionario
-    ).exclude(tipo_documento__nome="RF")
+    carichi_precedenti = _totali_per_articolo(
+        RigaCarico.objects.filter(
+            carico__data=giorno_precedente,
+            carico__zona=zona,
+        )
+    )
+    resi_precedenti = (
+        _totali_per_articolo(
+            RigaReso.objects.filter(
+                reso__data=ultima_data_reso,
+                reso__zona=zona,
+            )
+        )
+        if ultima_data_reso is not None
+        else {}
+    )
+    resi_attuali = _totali_per_articolo(
+        RigaReso.objects.filter(reso__data=giorno, reso__zona=zona)
+    )
 
+    righe_bolla = RigaBolla.objects.select_related("articolo")
+    bolle_del_giorno = (
+        Bolla.objects.filter(
+            Q(data__range=(data_inizio, data_fine))
+            | Q(
+                data__range=(prec_inizio, prec_fine),
+                note__icontains="conto domani",
+            ),
+            cliente__zona=zona,
+        )
+        .exclude(tipo_documento__nome="RF")
+        .select_related("cliente__tipo_documento_predefinito", "tipo_documento")
+        .prefetch_related(Prefetch("righe", queryset=righe_bolla))
+    )
+
+    totali_bolle = defaultdict(int)
+    totali_nt = defaultdict(int)
+    totali_cls = defaultdict(int)
     documenti = []
+
     for bolla in bolle_del_giorno:
-        righe = RigaBolla.objects.filter(bolla=bolla)
-        documento = {"cliente": f"{bolla.cliente.nome}", "tipo":f"{bolla.cliente.tipo_documento_predefinito.nome}"}
-        documento["righe"] = []
-        for riga in righe:
-            oggetto = {"articolo": f"{riga.articolo.nome}", "quantita": f"{riga.quantita}"}
-            documento["righe"].append(oggetto)
-        documenti.append(documento)
-
-    reso_del_giorno = Reso.objects.filter(data=data, zona=zona)
-
-    articoli = Articolo.objects.all()
-    riepilogo = {}
-    for articolo in articoli:
-        carico_prec = 0
-        reso_prec = 0
-        nome_art = ""
-        carico_totale = 0
-        reso_att = 0
-        bolla_totale = 0
-        quantita_venduta = 0
-        nome_art = articolo.nome
-        carico_prec = RigaCarico.objects.filter(carico__in=carico_giorno_precedente, articolo=articolo).aggregate(Sum("quantita"))['quantita__sum'] or 0
-        reso_prec = RigaReso.objects.filter(reso__in=reso_giorno_precedente, articolo=articolo).aggregate(Sum("quantita"))['quantita__sum'] or 0
-        carico_totale = carico_prec + reso_prec
-        reso_att = (RigaReso.objects.filter(reso__in=reso_del_giorno, articolo=articolo).aggregate(Sum("quantita")))['quantita__sum'] or 0
-        bolla_totale = RigaBolla.objects.filter(bolla__in=bolle_del_giorno, articolo=articolo).aggregate(Sum("quantita"))['quantita__sum'] or 0
-
-        bolla_nt = RigaBolla.objects.filter(bolla__in=bolle_del_giorno, articolo=articolo, bolla__tipo_documento__nome="NT").aggregate(Sum("quantita"))[
-            'quantita__sum'] or 0
-        bolla_cls = RigaBolla.objects.filter(bolla__in=bolle_del_giorno, articolo=articolo, bolla__tipo_documento__nome="CLS").aggregate(Sum("quantita"))[
-            'quantita__sum'] or 0
-
-        quantita_venduta = carico_totale - bolla_totale - reso_att
-        prezzo = Articolo.objects.filter(nome=nome_art).first().prezzo_ivato
-        tot_euro = float(quantita_venduta * prezzo)
-        #if tot_euro == 0:
-        #    continue
-
-        riepilogo[nome_art] = {
-            "nome" : nome_art,
-            "carico_prec" : carico_prec,
-            "reso_prec" : reso_prec,
-            "carico_tot" : carico_totale,
-            "reso_att" : reso_att,
-            "bolla_nt" : bolla_nt,
-            "bolla_cls" : bolla_cls,
-            "bolla_totale" : bolla_totale,
-            "quantita_venduta" : quantita_venduta,
-            "tot_euro" : format(tot_euro, ".2f")
+        documento = {
+            "cliente": f"{bolla.cliente.nome}",
+            "tipo": f"{bolla.cliente.tipo_documento_predefinito.nome}",
+            "righe": [],
         }
 
-    totale = 0
-    for articolo in riepilogo:
-        totale += float(riepilogo[articolo].get("tot_euro"))
+        for riga in bolla.righe.all():
+            documento["righe"].append(
+                {"articolo": f"{riga.articolo.nome}", "quantita": f"{riga.quantita}"}
+            )
+            totali_bolle[riga.articolo_id] += riga.quantita
+            if bolla.tipo_documento.nome == "NT":
+                totali_nt[riga.articolo_id] += riga.quantita
+            elif bolla.tipo_documento.nome == "CLS":
+                totali_cls[riga.articolo_id] += riga.quantita
+
+        documenti.append(documento)
+
+    riepilogo = {}
+    totale = Decimal("0")
+
+    for articolo in Articolo.objects.all():
+        carico_prec = carichi_precedenti.get(articolo.pk, 0)
+        reso_prec = resi_precedenti.get(articolo.pk, 0)
+        carico_totale = carico_prec + reso_prec
+        reso_att = resi_attuali.get(articolo.pk, 0)
+        bolla_totale = totali_bolle[articolo.pk]
+        quantita_venduta = carico_totale - bolla_totale - reso_att
+        tot_euro = Decimal(quantita_venduta) * articolo.prezzo_ivato
+        tot_euro_formattato = format(tot_euro, ".2f")
+        totale += Decimal(tot_euro_formattato)
+
+        riepilogo[articolo.nome] = {
+            "nome": articolo.nome,
+            "carico_prec": carico_prec,
+            "reso_prec": reso_prec,
+            "carico_tot": carico_totale,
+            "reso_att": reso_att,
+            "bolla_nt": totali_nt[articolo.pk],
+            "bolla_cls": totali_cls[articolo.pk],
+            "bolla_totale": bolla_totale,
+            "quantita_venduta": quantita_venduta,
+            "tot_euro": tot_euro_formattato,
+        }
 
     return {
-        "riepilogo":riepilogo,
-        "bolle_del_giorno":bolle_del_giorno,
-        "documenti" : documenti,
+        "riepilogo": riepilogo,
+        "bolle_del_giorno": bolle_del_giorno,
+        "documenti": documenti,
         "totale": totale,
         "zona": zona,
         "data": data,

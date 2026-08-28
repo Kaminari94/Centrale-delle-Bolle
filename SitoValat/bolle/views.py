@@ -5,6 +5,7 @@ from django.views.generic import TemplateView, ListView, DetailView
 from django.views.generic import DeleteView, UpdateView, CreateView
 from django.contrib.auth.views import LoginView
 from django.contrib.auth import user_logged_in
+from django.contrib.auth.decorators import login_required
 from decimal import Decimal
 from .models import *
 import fitz
@@ -23,7 +24,7 @@ from django.views import View
 from django.core.files.storage import default_storage
 from .utils.genera_pdf import genera_pdf_base64
 from .utils.parser import parse_file
-from .utils.riepilogo import calcola_riep_giornaliero
+from .utils.riepilogo import ParametriRiepilogoNonValidi, calcola_riep_giornaliero
 from django.utils.dateparse import parse_date
 from pdfminer.high_level import extract_text
 from django.http import FileResponse
@@ -1109,8 +1110,13 @@ def menu_riepiloghi(request):
 
 from django.template.defaultfilters import date as _date
 
+@login_required
 def riepilogo_giornaliero(request):
-    dati = calcola_riep_giornaliero(request)
+    try:
+        dati = calcola_riep_giornaliero(request)
+    except ParametriRiepilogoNonValidi as exc:
+        messages.error(request, str(exc))
+        return redirect("menu-riepiloghi")
     riep = dati["riepilogo"]
 
     return render(request, 'riepiloghi/riepilogo_giornaliero.html', {'riepilogo': riep, 'totale':format(dati["totale"], ".2f"), 'zona':dati["zona"], 'data_giorno': _date(dati["data"], "Y-m-d"), 'data':_date(dati["data"], "l, d E Y")})
@@ -1118,8 +1124,13 @@ def riepilogo_giornaliero(request):
 from openpyxl import load_workbook
 from .utils.excel_config import *
 
+@login_required
 def riepilogo_giornaliero_stampa(request):
-    dati = calcola_riep_giornaliero(request)
+    try:
+        dati = calcola_riep_giornaliero(request)
+    except ParametriRiepilogoNonValidi as exc:
+        messages.error(request, str(exc))
+        return redirect("menu-riepiloghi")
     template_path = os.path.join(settings.BASE_DIR, 'bolle', 'utils', "template_conteggio.xlsx")
     wb = load_workbook(template_path)
     ws = wb.active
