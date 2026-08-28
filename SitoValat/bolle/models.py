@@ -43,17 +43,17 @@ class Articolo(models.Model):
     @property
     def prezzo_ivato(self):
         """Calcola il prezzo con IVA inclusa."""
-        return self.prezzo * Decimal(1 + self.iva / 100)
+        return self.prezzo * (Decimal("1") + Decimal(self.iva) / Decimal("100"))
 
     @property
     def costo_ivato(self):
         """Calcola il costo con IVA inclusa."""
-        return self.costo * Decimal(1 + self.iva / 100)
+        return self.costo * (Decimal("1") + Decimal(self.iva) / Decimal("100"))
 
     @property
     def prezzo_tr_ivato(self):
         """Calcola il prezzo transfert con IVA inclusa."""
-        return self.prezzo_tr * Decimal(1 + self.iva / 100)
+        return self.prezzo_tr * (Decimal("1") + Decimal(self.iva) / Decimal("100"))
 
 class Categoria(models.Model):
     nome = models.CharField(max_length=255, unique=True)  # Nome della categoria (es. Elettronica, Alimentari)

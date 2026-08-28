@@ -6,6 +6,7 @@ urlpatterns = [
     path('', HomePageView.as_view(), name='home'),
     path('login/', UserLoginView.as_view(next_page='home'), name='login'),
     path('logout/', LogoutView.as_view(next_page='home'), name='logout'),
+    path('articoli/', ArticoloListView.as_view(), name='articoli-list'),
     path('bolle/', BollaListView.as_view(), name='bolle-list'),
     path('bolle/<int:pk>/', BollaDetailView.as_view(), name='bolla-detail'),
     path('bolle/create/', BollaCreateView.as_view(), name='bolla-create'),

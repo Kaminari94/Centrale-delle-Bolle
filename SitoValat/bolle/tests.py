@@ -1,6 +1,6 @@
 from django.test import TestCase
 from datetime import datetime
-from django.test import TestCase
+from decimal import Decimal
 from django.utils import timezone
 from django.urls import reverse
 from django.contrib.auth import get_user_model
@@ -13,7 +13,87 @@ from .models import (
     Proprietario,
     Bolla,
     SchedaTV,
+    Articolo,
+    Categoria,
 )
+
+class ArticoloListViewTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="articoli", password="test-password")
+        self.categoria_b = Categoria.objects.create(nome="Bevande", ordine=2)
+        self.categoria_a = Categoria.objects.create(nome="Alimentari", ordine=1)
+        self.categoria_vuota = Categoria.objects.create(nome="Vuota", ordine=0)
+        self.articolo_b = Articolo.objects.create(
+            nome="B200",
+            descrizione="Descrizione completa",
+            categoria=self.categoria_b,
+            iva=22,
+            prezzo=Decimal("10.125"),
+            costo=Decimal("5.555"),
+        )
+        self.articolo_a = Articolo.objects.create(
+            nome="A100",
+            descrizione=None,
+            categoria=self.categoria_a,
+            iva=4,
+            prezzo=Decimal("1.005"),
+            costo=Decimal("0.000"),
+        )
+
+    def test_login_required(self):
+        response = self.client.get(reverse("articoli-list"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login/", response.url)
+
+    def test_lists_all_articles_in_category_order(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("articoli-list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "articoli/articolo_list.html")
+        self.assertQuerySetEqual(
+            response.context["articoli"],
+            [self.articolo_a, self.articolo_b],
+        )
+        self.assertQuerySetEqual(
+            response.context["categorie"],
+            [self.categoria_a, self.categoria_b],
+        )
+
+    def test_renders_prices_costs_without_transfer_prices(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("articoli-list"))
+
+        self.assertContains(response, "Prezzo IVA incl.")
+        self.assertContains(response, "Costo IVA incl.")
+        self.assertContains(response, "Descrizione completa")
+        self.assertContains(response, "&mdash;")
+        self.assertNotContains(response, "transfert")
+
+    def test_vat_properties_use_exact_decimal_arithmetic(self):
+        self.assertEqual(self.articolo_b.prezzo_ivato, Decimal("12.35250"))
+        self.assertEqual(self.articolo_b.costo_ivato, Decimal("6.77710"))
+
+    def test_empty_list_has_readable_fallback(self):
+        Articolo.objects.all().delete()
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("articoli-list"))
+
+        self.assertContains(response, "Nessun articolo disponibile.")
+        self.assertNotContains(response, 'id="articoli-table"')
+
+    def test_homepage_contains_article_navigation_and_cards(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("home"))
+
+        self.assertContains(response, reverse("articoli-list"), count=3)
+        self.assertContains(response, "bi-tags", count=2)
 
 class AnnualCountersTests(TestCase):
     def setUp(self):

@@ -177,6 +177,29 @@ class HomePageView(TemplateView):
         except Exception as e:
             print(f"Errore durante la creazione della bolla veloce: {e}")
 
+class ArticoloListView(LoginRequiredMixin, ListView):
+    model = Articolo
+    template_name = 'articoli/articolo_list.html'
+    context_object_name = 'articoli'
+
+    def get_queryset(self):
+        return (
+            Articolo.objects
+            .select_related('categoria')
+            .order_by('categoria__ordine', 'categoria__nome', 'nome')
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['categorie'] = (
+            Categoria.objects
+            .filter(articoli__isnull=False)
+            .distinct()
+            .order_by('ordine', 'nome')
+        )
+        return context
+
+
 class BollaListView(LoginRequiredMixin, ListView):
     model = Bolla
     template_name = 'bolle/bolle_list.html'
