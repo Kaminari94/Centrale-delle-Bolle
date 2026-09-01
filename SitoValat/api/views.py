@@ -21,9 +21,9 @@ def health(request):
     return Response({"ok": True})
 
 def _apply_customer_scope(qs, user):
-
-    if getattr(user, "is_superuser", False):
-        return qs
+    # Per un accesso amministrativo globale, ripristinare questo bypass:
+    # if getattr(user, "is_superuser", False):
+    #     return qs
 
     user_conc = getattr(user, "concessionario", None)
     user_zona = getattr(user, "zona", None)
@@ -42,8 +42,9 @@ def _apply_user_scope(qs, user):
     - se user ha attributo 'concessionario': filtra per quel concessionario
     - altrimenti: nessun accesso
     """
-    if getattr(user, "is_superuser", False):
-        return qs
+    # Per un accesso amministrativo globale, ripristinare questo bypass:
+    # if getattr(user, "is_superuser", False):
+    #     return qs
 
     user_conc = getattr(user, "concessionario", None)
     user_zona = getattr(user, "zona", None)

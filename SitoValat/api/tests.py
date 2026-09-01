@@ -128,6 +128,23 @@ class ApiScopingTests(APITestCase):
         self.assertEqual(self.client.get("/api/customers/").data["results"], [])
         self.assertEqual(self.client.get(reverse("api_bolle_detail", args=[self.bolla_a.pk])).status_code, 404)
 
+    def test_superuser_with_concessionario_is_scoped_to_that_concessionario(self):
+        self.conc_user.is_superuser = True
+        self.conc_user.save(update_fields=["is_superuser"])
+        self.client.force_authenticate(self.conc_user)
+
+        customers = self.client.get("/api/customers/")
+        bolle = self.client.get(reverse("api_bolle_list"))
+
+        self.assertEqual({item["id"] for item in customers.data["results"]}, {
+            self.cliente_a.pk,
+            self.cliente_a_seconda.pk,
+        })
+        self.assertEqual({item["id"] for item in bolle.data["results"]}, {
+            self.bolla_a.pk,
+            self.bolla_a_seconda.pk,
+        })
+
     def test_quick_create_rejects_customer_outside_scope(self):
         self.client.force_authenticate(self.zone_user)
         initial_count = Bolla.objects.count()
