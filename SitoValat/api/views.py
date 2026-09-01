@@ -47,7 +47,7 @@ def _apply_user_scope(qs, user):
     Filtra le bolle in base all'utente.
     - superuser: tutto
     - se user ha attributo 'concessionario': filtra per quel concessionario
-    - altrimenti: non filtra (non rompo niente; puoi irrigidire dopo)
+    - altrimenti: nessun accesso
     """
     if getattr(user, "is_superuser", False):
         return qs
@@ -59,7 +59,7 @@ def _apply_user_scope(qs, user):
     elif user_zona is not None:
         return qs.filter(cliente__zona=user_zona)
 
-    return qs
+    return qs.none()
 
 
 def _parse_date_or_today(date_str):
@@ -202,7 +202,10 @@ def bolle_quick_create(request):
     # cliente = get_object_or_404(qs_clienti, pk=customer_id)
     #
     # Se per ora vuoi “replicare” la tua logica vecchia, sostituisci sopra con get_object_or_404 diretto:
-    cliente = get_object_or_404(Cliente, pk=customer_id)
+    cliente = get_object_or_404(
+        _apply_customer_scope(Cliente.objects.all(), request.user),
+        pk=customer_id,
+    )
 
     # ---- 2) Parsing righe + controlli di base (come nel tuo codice) ----
     lines = [ln.strip() for ln in raw_lines.strip().split("\n") if ln.strip()]
@@ -512,6 +515,7 @@ def movim_quick_create(request):
 
 @api_view(["DELETE"])  # <-- 1. Cambiato a DELETE
 @permission_classes([IsAuthenticated])
+@transaction.atomic
 def delete_view(request, pk: int):
     """
     DELETE /api/bolle/<id>/

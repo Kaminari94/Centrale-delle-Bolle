@@ -464,8 +464,8 @@ class AnnualCountersTests(TestCase):
         self.assertEqual(s2.numero, 2)
         self.assertEqual(s3.numero, 1)
 
-        c2025 = TipoDocCounter.objects.get(tipo=self.tipo_doc_NTV, anno=2025)
-        c2026 = TipoDocCounter.objects.get(tipo=self.tipo_doc_NTV, anno=2026)
+        c2025 = TipoDocCounter.objects.get(tipo=self.tipo_doc, anno=2025)
+        c2026 = TipoDocCounter.objects.get(tipo=self.tipo_doc, anno=2026)
         self.assertEqual(c2025.ultimo_numero, 2)
         self.assertEqual(c2026.ultimo_numero, 1)
 
@@ -478,6 +478,6 @@ class AnnualCountersTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertFalse(SchedaTV.objects.filter(pk=s2.pk).exists())
 
-        c2026 = TipoDocCounter.objects.get(tipo=self.tipo_doc, anno=2026)
+        c2026 = TipoDocCounter.objects.get(tipo=self.tipo_doc_NTV, anno=2026)
         self.assertEqual(c2026.ultimo_numero, 1)
 
