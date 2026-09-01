@@ -11,6 +11,7 @@ urlpatterns = [
     path("bolle/<int:pk>/receipt/", views.receipt_view, name="api_receipt"),
     path("bolle/<int:pk>/elimina/", views.delete_view, name="api_delete"),
     path("customers/", views.customers_list),
+    path("articles/", views.articles_list, name="api_articles_list"),
     path("bolle/quick/", views.bolle_quick_create),
     path("movim/", views.movim_quick_create),
 ]

@@ -45,12 +45,19 @@ class ApiScopingTests(APITestCase):
         )
         self.tipo_a = TipoDocumento.objects.create(nome="A", concessionario=self.concessionario_a)
         self.tipo_b = TipoDocumento.objects.create(nome="B", concessionario=self.concessionario_b)
-        self.proprietario = Proprietario.objects.create(nome="Proprietario")
+        self.proprietario = Proprietario.objects.create(nome="Proprietario A")
+        self.proprietario_b = Proprietario.objects.create(nome="Proprietario B")
         self.cliente_a = self._cliente("Cliente A", self.concessionario_a, self.zona_a, self.tipo_a)
         self.cliente_a_seconda = self._cliente(
             "Cliente A seconda", self.concessionario_a, self.zona_a_seconda, self.tipo_a
         )
-        self.cliente_b = self._cliente("Cliente B", self.concessionario_b, self.zona_b, self.tipo_b)
+        self.cliente_b = self._cliente(
+            "Cliente B",
+            self.concessionario_b,
+            self.zona_b,
+            self.tipo_b,
+            proprietario=self.proprietario_b,
+        )
         self.bolla_a = Bolla.objects.create(cliente=self.cliente_a, tipo_documento=self.tipo_a)
         self.bolla_a_seconda = Bolla.objects.create(
             cliente=self.cliente_a_seconda, tipo_documento=self.tipo_a
@@ -60,16 +67,23 @@ class ApiScopingTests(APITestCase):
         self.articolo = Articolo.objects.create(
             nome="600001", descrizione="Articolo test", categoria=categoria
         )
+        self.articolo_b = Articolo.objects.create(
+            nome="600002", descrizione="Articolo concessionario B", categoria=categoria
+        )
         ArticoliConcessi.objects.create(proprietario=self.proprietario, articolo=self.articolo)
+        ArticoliConcessi.objects.create(proprietario=self.proprietario_b, articolo=self.articolo_b)
 
-    def _cliente(self, nome, concessionario, zona, tipo_documento):
+    def _cliente(self, nome, concessionario, zona, tipo_documento, proprietario=None):
+        sequence = Cliente.objects.count() + 100
         return Cliente.objects.create(
             nome=nome,
             concessionario=concessionario,
             zona=zona,
             tipo_documento_predefinito=tipo_documento,
-            proprietario=self.proprietario,
-            piva=f"IT{Cliente.objects.count() + 100:011d}",
+            proprietario=proprietario or self.proprietario,
+            codice=f"CL{sequence}",
+            citta="Salerno",
+            piva=f"IT{sequence:011d}",
         )
 
     def test_endpoints_require_authentication(self):
@@ -172,3 +186,96 @@ class ApiScopingTests(APITestCase):
         self.assertEqual(modify_response.status_code, 404)
         self.assertEqual(delete_response.status_code, 404)
         self.assertTrue(Bolla.objects.filter(pk=self.bolla_b.pk).exists())
+
+    def test_customers_require_authentication(self):
+        self.assertEqual(self.client.get("/api/customers/").status_code, 401)
+
+    def test_customers_search_by_name_and_keep_existing_fields(self):
+        self.client.force_authenticate(self.zone_user)
+
+        response = self.client.get("/api/customers/", {"q": "Cliente A"})
+
+        self.assertEqual(response.status_code, 200)
+        customer = response.data["results"][0]
+        self.assertEqual(customer["id"], self.cliente_a.pk)
+        self.assertEqual(customer["nome"], self.cliente_a.nome)
+        self.assertEqual(customer["via"], self.cliente_a.via)
+        self.assertEqual(customer["codice"], self.cliente_a.codice)
+        self.assertEqual(customer["citta"], "Salerno")
+        self.assertEqual(customer["zona"], {"id": self.zona_a.pk, "nome": self.zona_a.nome})
+        self.assertEqual(
+            customer["concessionario"],
+            {"id": self.concessionario_a.pk, "nome": self.concessionario_a.nome},
+        )
+
+    def test_customers_search_by_code_and_respect_scope(self):
+        self.client.force_authenticate(self.conc_user)
+
+        response = self.client.get("/api/customers/", {"q": self.cliente_a_seconda.codice})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item["id"] for item in response.data["results"]], [self.cliente_a_seconda.pk])
+        self.assertNotIn(self.cliente_b.pk, [item["id"] for item in response.data["results"]])
+
+    def test_unscoped_user_cannot_search_customers(self):
+        self.client.force_authenticate(self.unscoped_user)
+
+        response = self.client.get("/api/customers/", {"q": "Cliente"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["results"], [])
+
+    def test_articles_require_authentication(self):
+        self.assertEqual(self.client.get(reverse("api_articles_list")).status_code, 401)
+
+    def test_articles_search_exact_code_before_other_matches(self):
+        articolo_esatto = Articolo.objects.create(
+            nome="600010", descrizione="Altro articolo", categoria=self.articolo.categoria
+        )
+        ArticoliConcessi.objects.create(proprietario=self.proprietario, articolo=articolo_esatto)
+        self.client.force_authenticate(self.zone_user)
+
+        response = self.client.get(reverse("api_articles_list"), {"q": "600010"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["results"][0]["id"], articolo_esatto.pk)
+        self.assertEqual(response.data["results"][0]["codice"], "600010")
+
+    def test_articles_search_by_prefix_and_description(self):
+        articolo_prefisso = Articolo.objects.create(
+            nome="600010", descrizione="Formaggio speciale", categoria=self.articolo.categoria
+        )
+        ArticoliConcessi.objects.create(proprietario=self.proprietario, articolo=articolo_prefisso)
+        self.client.force_authenticate(self.zone_user)
+
+        prefix_response = self.client.get(reverse("api_articles_list"), {"q": "6000"})
+        description_response = self.client.get(reverse("api_articles_list"), {"q": "speciale"})
+
+        self.assertIn(articolo_prefisso.pk, [item["id"] for item in prefix_response.data["results"]])
+        self.assertEqual([item["id"] for item in description_response.data["results"]], [articolo_prefisso.pk])
+
+    def test_articles_limit_and_user_scope(self):
+        for code in ("600010", "600011", "600012"):
+            articolo = Articolo.objects.create(nome=code, descrizione="Articolo", categoria=self.articolo.categoria)
+            ArticoliConcessi.objects.create(proprietario=self.proprietario, articolo=articolo)
+        self.client.force_authenticate(self.zone_user)
+
+        response = self.client.get(reverse("api_articles_list"), {"limit": 2})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["results"]), 2)
+        self.assertNotIn(self.articolo_b.pk, [item["id"] for item in response.data["results"]])
+
+    def test_articles_filter_by_customer_and_reject_customer_outside_scope(self):
+        self.client.force_authenticate(self.zone_user)
+
+        allowed_response = self.client.get(
+            reverse("api_articles_list"), {"customer_id": self.cliente_a.pk}
+        )
+        outside_response = self.client.get(
+            reverse("api_articles_list"), {"customer_id": self.cliente_b.pk}
+        )
+
+        self.assertEqual(allowed_response.status_code, 200)
+        self.assertEqual([item["id"] for item in allowed_response.data["results"]], [self.articolo.pk])
+        self.assertEqual(outside_response.status_code, 404)

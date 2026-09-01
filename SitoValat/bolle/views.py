@@ -35,6 +35,7 @@ from django.utils import timezone
 from django.conf import settings
 from .utils import centrale_fattura
 from .utils.gen_pdf_bolla import genera_pdf_bolla
+from .services.codes import normalize_article_code
 
 def ensure_aware(dt, tz):
     return dt if timezone.is_aware(dt) else timezone.make_aware(dt, tz)
@@ -104,14 +105,7 @@ class HomePageView(TemplateView):
                         if quantita == 0:
                             continue
 
-                        if codice == '31103':
-                            codice = "031103"
-                        elif codice == '31163':
-                            codice = "031163"
-                        elif len(codice) == 3:
-                            codice = "600" + codice
-                        elif len(codice) == 5:
-                            codice = "6" + codice
+                        codice = normalize_article_code(codice)
                         if codice not in arti:
                             context = self.get_context_data()
                             context['messages'] = [f"Articolo errato: {codice}."]

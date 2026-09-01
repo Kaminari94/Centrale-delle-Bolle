@@ -1,6 +1,6 @@
 # api/serializers.py
 from rest_framework import serializers
-from bolle.models import Bolla, RigaBolla, Cliente
+from bolle.models import Articolo, Bolla, Cliente, Concessionario, RigaBolla, Zona
 
 
 class RigaBollaSerializer(serializers.ModelSerializer):
@@ -33,6 +33,25 @@ class BollaDetailSerializer(serializers.ModelSerializer):
         fields = ["id", "numero", "data", "cliente_nome", "tipo_documento_nome", "righe"]
 
 class CustomerMiniSerializer(serializers.ModelSerializer):
+    zona = serializers.SerializerMethodField()
+    concessionario = serializers.SerializerMethodField()
+
+    def get_zona(self, obj):
+        if not obj.zona_id:
+            return None
+        return {"id": obj.zona_id, "nome": obj.zona.nome}
+
+    def get_concessionario(self, obj):
+        return {"id": obj.concessionario_id, "nome": obj.concessionario.nome}
+
     class Meta:
         model = Cliente
-        fields = ("id", "nome", "via")
+        fields = ("id", "nome", "via", "codice", "citta", "zona", "concessionario")
+
+
+class ArticoloMiniSerializer(serializers.ModelSerializer):
+    codice = serializers.CharField(source="nome", read_only=True)
+
+    class Meta:
+        model = Articolo
+        fields = ("id", "codice", "descrizione")

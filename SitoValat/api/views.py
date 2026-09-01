@@ -1,36 +1,29 @@
 from datetime import datetime, time, timedelta
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from django.db.models import Q
+from django.db.models import Case, IntegerField, Q, Value, When
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from bolle.models import Bolla, Cliente, Articolo, TipoDocumento, TipoDocCounter, Zona, RigaBolla, RigaCarico, ArticoliConcessi, Carico, Reso, RigaCarico, RigaReso
-from .serializers import BollaListSerializer, BollaDetailSerializer, CustomerMiniSerializer
+from bolle.models import Bolla, Cliente, Articolo, TipoDocumento, TipoDocCounter, Zona, RigaCarico, Carico, Reso, RigaReso
+from .serializers import ArticoloMiniSerializer, BollaListSerializer, BollaDetailSerializer, CustomerMiniSerializer
 from .receipts.renderer import render_ddt
 from django.core.exceptions import ValidationError
 from rest_framework import status
+from bolle.services.codes import normalize_article_code
+from bolle.services.documents import create_bolla_with_lines, replace_bolla_lines
+from bolle.services.rows import allowed_article_ids, parse_quantity, validate_article_lines
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def health(request):
     return Response({"ok": True})
 
-def _normalize_codice(codice: str) -> str:
-    codice = (codice or "").strip()
-
-    if codice == "31103":
-        return "031103"
-    if codice == "31163":
-        return "031163"
-    if len(codice) == 3:
-        return "600" + codice
-    if len(codice) == 5:
-        return "6" + codice
-    return codice
-
 def _apply_customer_scope(qs, user):
+
+    if getattr(user, "is_superuser", False):
+        return qs
 
     user_conc = getattr(user, "concessionario", None)
     user_zona = getattr(user, "zona", None)
@@ -60,6 +53,25 @@ def _apply_user_scope(qs, user):
         return qs.filter(cliente__zona=user_zona)
 
     return qs.none()
+
+
+def _parse_limit(request, default=20, maximum=100):
+    try:
+        limit = int(request.query_params.get("limit", default))
+    except (TypeError, ValueError):
+        return default
+    return min(max(limit, 1), maximum)
+
+
+def _allowed_articles_for_customer(cliente):
+    return Articolo.objects.filter(pk__in=allowed_article_ids(cliente))
+
+
+def _visible_articles_for_user(user):
+    clienti_visibili = _apply_customer_scope(Cliente.objects.all(), user)
+    return Articolo.objects.filter(
+        concessioni__proprietario__clienti__in=clienti_visibili
+    ).distinct()
 
 
 def _parse_date_or_today(date_str):
@@ -147,7 +159,7 @@ def customers_list(request):
     GET /api/customers/?q=...
     Ritorna lista clienti per dropdown (id, nome), scoped per user.
     """
-    qs = Cliente.objects.all()
+    qs = Cliente.objects.select_related("zona", "concessionario")
 
     # (opzionale) escludi NTV come fai tu
     qs = qs.exclude(tipo_documento_predefinito__nome="NTV")
@@ -157,11 +169,48 @@ def customers_list(request):
 
     q = request.query_params.get("q")
     if q:
-        qs = qs.filter(nome__icontains=q)
+        qs = qs.filter(Q(nome__icontains=q) | Q(codice__icontains=q))
 
     qs = qs.order_by("nome")
+    limit = _parse_limit(request)
 
-    data = CustomerMiniSerializer(qs, many=True).data
+    data = CustomerMiniSerializer(qs[:limit], many=True).data
+    return Response({"count": len(data), "results": data})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def articles_list(request):
+    """GET /api/articles/?q=&customer_id=&limit=20."""
+    qs = _visible_articles_for_user(request.user)
+    customer_id = request.query_params.get("customer_id")
+
+    if customer_id is not None:
+        try:
+            customer_id = int(customer_id)
+        except (TypeError, ValueError):
+            return Response({"detail": "customer_id non valido"}, status=status.HTTP_400_BAD_REQUEST)
+        cliente = get_object_or_404(
+            _apply_customer_scope(Cliente.objects.all(), request.user),
+            pk=customer_id,
+        )
+        qs = _allowed_articles_for_customer(cliente)
+
+    q = (request.query_params.get("q") or "").strip()
+    if q:
+        qs = qs.filter(Q(nome__icontains=q) | Q(descrizione__icontains=q)).annotate(
+            search_priority=Case(
+                When(nome__iexact=q, then=Value(0)),
+                When(nome__istartswith=q, then=Value(1)),
+                default=Value(2),
+                output_field=IntegerField(),
+            )
+        ).order_by("search_priority", "nome")
+    else:
+        qs = qs.order_by("nome")
+
+    limit = _parse_limit(request)
+    data = ArticoloMiniSerializer(qs[:limit], many=True).data
     return Response({"count": len(data), "results": data})
 
 
@@ -222,13 +271,13 @@ def bolle_quick_create(request):
         codice_raw, q_raw = parts[0], parts[1]
 
         try:
-            quantita = int(q_raw)
+            quantita = parse_quantity(q_raw)
         except ValueError:
             errors.append({"line": idx, "message": "Quantità non numerica"})
             continue
 
         somma += quantita
-        codice_norm = _normalize_codice(codice_raw)
+        codice_norm = normalize_article_code(codice_raw)
 
         parsed.append({
             "line": idx,
@@ -246,69 +295,19 @@ def bolle_quick_create(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # ---- 3) Validazioni “di dominio”: articolo esiste + concesso ----
-    # (A) Preparo set codici richiesti (skip quantita==0 come fai tu)
-    richiesti = {p["codice"] for p in parsed if p["quantita"] != 0}
-
-    # (B) Carico tutti gli articoli in 1 query
-    articoli_map = {a.nome: a for a in Articolo.objects.filter(nome__in=richiesti)}
-
-    # (C) articoli concessi al proprietario del cliente
-    concessi_ids = set(
-        ArticoliConcessi.objects
-        .filter(proprietario=cliente.proprietario)
-        .values_list("articolo", flat=True)
+    articoli_map, article_errors = validate_article_lines(
+        cliente,
+        parsed,
+        include_customer_address=True,
     )
-
-    # (D) Check “esiste” e “concesso”
-    for p in parsed:
-        if p["quantita"] == 0:
-            continue
-
-        articolo = articoli_map.get(p["codice"])
-        if articolo is None:
-            errors.append({"line": p["line"], "message": f"Articolo errato: {p['codice']}."})
-            continue
-
-        if articolo.pk not in concessi_ids:
-            errors.append({
-                "line": p["line"],
-                "message": f"Articolo {p['codice']} non concesso a {cliente.nome} {cliente.via}."
-            })
+    errors.extend(article_errors)
 
     if errors:
         return Response({"errors": errors}, status=status.HTTP_400_BAD_REQUEST)
 
     # ---- 4) Creazione bolla + righe in transazione ----
     try:
-        with transaction.atomic():
-            bolla = Bolla.objects.create(
-                cliente=cliente,
-                tipo_documento=cliente.tipo_documento_predefinito,
-            )
-
-            # Ottimizzazione lotto:
-            # qui mantengo la tua logica "prendi ultimo carico per articolo"
-            # Se vuoi super-ottimizzare dopo, si può fare batch, ma per 30 prodotti va benissimo.
-            for p in parsed:
-                if p["quantita"] == 0:
-                    continue
-
-                articolo = articoli_map[p["codice"]]
-
-                ultimo_carico = (
-                    RigaCarico.objects
-                    .filter(articolo=articolo)
-                    .order_by("-carico__data")
-                    .first()
-                )
-
-                RigaBolla.objects.create(
-                    bolla=bolla,
-                    articolo=articolo,
-                    quantita=p["quantita"],
-                    lotto=ultimo_carico.lotto if ultimo_carico else "---",
-                )
+        bolla = create_bolla_with_lines(cliente, parsed, articoli_map)
 
         return Response({"bolla_id": bolla.pk}, status=status.HTTP_201_CREATED)
 
@@ -378,7 +377,7 @@ def movim_quick_create(request):
             codice_raw, q_raw = parts[0], parts[1]
 
         try:
-            quantita = int(q_raw)
+            quantita = parse_quantity(q_raw)
             if quantita <= 0:
                 errors.append({"line": idx, "message": "Quantità deve essere maggiore di zero."})
                 continue
@@ -387,7 +386,7 @@ def movim_quick_create(request):
             continue
 
         somma += quantita
-        codice_norm = _normalize_codice(codice_raw)
+        codice_norm = normalize_article_code(codice_raw)
 
         item_data = {
             "line": idx,
@@ -594,14 +593,7 @@ def modifica_righe(request, pk: int):
     bolla = get_object_or_404(qs, pk=pk)
     cliente = bolla.cliente # Serve per i controlli sui permessi articoli
 
-    # 2. Mappatura Lotti Esistenti (Articolo -> Lotto)
-    # Serve per preservare il lotto originale se l'articolo è ancora presente
-    existing_lots = {}
-    for r in bolla.righe.all():
-        # Usiamo il nome dell'articolo (codice) come chiave
-        existing_lots[r.articolo.nome] = r.lotto
-
-    # 3. Parsing righe (identico a quick_create)
+    # 2. Parsing righe (identico a quick_create)
     lines = [ln.strip() for ln in raw_lines.strip().split("\n") if ln.strip()]
     errors = []
     parsed = [] 
@@ -616,13 +608,13 @@ def modifica_righe(request, pk: int):
         codice_raw, q_raw = parts[0], parts[1]
 
         try:
-            quantita = int(q_raw)
+            quantita = parse_quantity(q_raw)
         except ValueError:
             errors.append({"line": idx, "message": "Quantità non numerica"})
             continue
 
         somma += quantita
-        codice_norm = _normalize_codice(codice_raw)
+        codice_norm = normalize_article_code(codice_raw)
 
         parsed.append({
             "line": idx,
@@ -642,67 +634,15 @@ def modifica_righe(request, pk: int):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # 4. Validazioni di dominio (Articoli esistono? Sono concessi?)
-    richiesti = {p["codice"] for p in parsed if p["quantita"] != 0}
-    articoli_map = {a.nome: a for a in Articolo.objects.filter(nome__in=richiesti)}
-    
-    concessi_ids = set(
-        ArticoliConcessi.objects
-        .filter(proprietario=cliente.proprietario)
-        .values_list("articolo", flat=True)
-    )
-
-    for p in parsed:
-        if p["quantita"] == 0:
-            continue
-
-        articolo = articoli_map.get(p["codice"])
-        if articolo is None:
-            errors.append({"line": p["line"], "message": f"Articolo errato: {p['codice']}."})
-            continue
-
-        if articolo.pk not in concessi_ids:
-            errors.append({
-                "line": p["line"],
-                "message": f"Articolo {p['codice']} non concesso a {cliente.nome}."
-            })
+    articoli_map, article_errors = validate_article_lines(cliente, parsed)
+    errors.extend(article_errors)
 
     if errors:
         return Response({"errors": errors}, status=status.HTTP_400_BAD_REQUEST)
 
     # 5. Sostituzione Righe (Atomica)
     try:
-        with transaction.atomic():
-            # A. Cancella TUTTE le righe esistenti
-            bolla.righe.all().delete()
-
-            # B. Crea le nuove righe
-            for p in parsed:
-                if p["quantita"] == 0:
-                    continue
-
-                articolo = articoli_map[p["codice"]]
-
-                # LOGICA LOTTO:
-                # Se l'articolo c'era già, usa il vecchio lotto.
-                # Altrimenti, calcola l'ultimo carico disponibile.
-                if p["codice"] in existing_lots:
-                    lotto = existing_lots[p["codice"]]
-                else:
-                    ultimo_carico = (
-                        RigaCarico.objects
-                        .filter(articolo=articolo)
-                        .order_by("-carico__data")
-                        .first()
-                    )
-                    lotto = ultimo_carico.lotto if ultimo_carico else "---"
-
-                RigaBolla.objects.create(
-                    bolla=bolla,
-                    articolo=articolo,
-                    quantita=p["quantita"],
-                    lotto=lotto,
-                )
+        replace_bolla_lines(bolla, parsed, articoli_map)
 
         return Response({"type": "updated", "bolla_id": bolla.pk, "rows_count": len(parsed)}, status=status.HTTP_200_OK)
 
