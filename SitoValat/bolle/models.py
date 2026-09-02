@@ -91,6 +91,34 @@ class Cliente(models.Model):
     codice = models.CharField(max_length=30, default="0000")
     zona = models.ForeignKey('Zona', on_delete=models.CASCADE, related_name='clienti', default="", null=True, blank=True)
     ignorare = models.BooleanField(default=False, choices=IGNORA)
+
+    # Sequenza fisica del raccoglitore usata esclusivamente dal flusso NTV.
+    # In futuro sara' riutilizzata anche per l'ordine operativo delle fatture NTV.
+    ordine_ntv = models.PositiveIntegerField(null=True, blank=True, db_index=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(ordine_ntv__isnull=True) | models.Q(ordine_ntv__gte=1),
+                name='ordine_ntv_positivo_o_nullo',
+            ),
+            models.UniqueConstraint(
+                fields=['zona', 'ordine_ntv'],
+                condition=models.Q(ordine_ntv__isnull=False),
+                name='uniq_ordine_ntv_per_zona',
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.ordine_ntv is not None:
+            if self.ordine_ntv < 1:
+                raise ValidationError({'ordine_ntv': 'L\'ordine NTV deve essere maggiore o uguale a 1.'})
+            if not self.tipo_documento_predefinito or self.tipo_documento_predefinito.nome != 'NTV':
+                raise ValidationError({'ordine_ntv': 'L\'ordine NTV puo essere impostato solo per clienti NTV.'})
+            if not self.zona_id:
+                raise ValidationError({'ordine_ntv': 'Per impostare l\'ordine NTV il cliente deve avere una zona.'})
+
     def __str__(self):
         return f"{self.tipo_documento_predefinito} | {self.nome} - {self.via}"
 

@@ -5,6 +5,55 @@
 {% block content %}
 <h1>Modifica Scheda TV</h1>
 
+{% if sequence_index %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <a class="btn btn-outline-secondary {% if not previous_scheda %}disabled{% endif %}" {% if previous_scheda %}href="{% url 'schedatv-update' previous_scheda.pk %}"{% endif %}>&larr; Cliente precedente</a>
+    <div class="text-center">
+        <strong>Cliente {{ sequence_index }} di {{ sequence_total }}</strong><br>
+        {{ schedatv.cliente.nome }}<br>
+        {{ schedatv.cliente.indirizzo }}<br>
+        {{ schedatv.data|date:"F Y" }}
+    </div>
+    <a class="btn btn-outline-secondary {% if not next_scheda %}disabled{% endif %}" {% if next_scheda %}href="{% url 'schedatv-update' next_scheda.pk %}"{% endif %}>Cliente successivo &rarr;</a>
+</div>
+{% else %}
+<div class="alert alert-warning">Ordine NTV da configurare: questa scheda non fa parte della sequenza automatica.</div>
+{% endif %}
+
+{% if sequence_index %}
+<script>
+    let shiftSinistroPremuto = false;
+
+    document.addEventListener('keydown', function(event) {
+        if (event.code === 'ShiftLeft') {
+            shiftSinistroPremuto = true;
+            return;
+        }
+
+        const precedenteUrl = {% if previous_scheda %}"{% url 'schedatv-update' previous_scheda.pk %}"{% else %}null{% endif %};
+        const successivoUrl = {% if next_scheda %}"{% url 'schedatv-update' next_scheda.pk %}"{% else %}null{% endif %};
+        if (!shiftSinistroPremuto) return;
+
+        if (event.key === 'ArrowLeft' && precedenteUrl) {
+            event.preventDefault();
+            window.location.href = precedenteUrl;
+        }
+        if (event.key === 'ArrowRight' && successivoUrl) {
+            event.preventDefault();
+            window.location.href = successivoUrl;
+        }
+    });
+
+    document.addEventListener('keyup', function(event) {
+        if (event.code === 'ShiftLeft') shiftSinistroPremuto = false;
+    });
+
+    window.addEventListener('blur', function() {
+        shiftSinistroPremuto = false;
+    });
+</script>
+{% endif %}
+
 <h2>Aggiungi Riga</h2>
 <form method="GET" action="{% url 'schedatv-update' schedatv.pk %}">
 

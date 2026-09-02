@@ -55,6 +55,7 @@ urlpatterns = [
     path('schedetv/<int:pk>/delete/', SchedaTVDeleteView.as_view(), name='schedatv-delete'),
     path('schedetv/<int:pk>/rigadelete/', RigaSchedaTVDeleteView.as_view(), name='riga-schedaTV-delete'),
     path('schedetv/crea-schede/', CreaSchedeTV.as_view(), name='crea-schede'),
+    path('schedetv/ordine/', OrdineNTVView.as_view(), name='ordine-ntv'),
     path('fatture/scarica-tutte/', scarica_tutte_xml, name='scarica-tutte'),
     path('fatture/scarica-tutte-pdf/', scarica_tutte_fatture_pdf, name='scarica-tutte-pdf'),
     path('riepiloghi/avanzato/', report_avanzato, name='report-avanzato'),

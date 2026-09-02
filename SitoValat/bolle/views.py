@@ -31,6 +31,7 @@ from django.http import FileResponse
 import os
 from django.utils.timezone import make_aware, now, is_aware
 from django.db.models import Sum, Q, F
+from django.db import IntegrityError
 from django.utils import timezone
 from django.conf import settings
 from .utils import centrale_fattura
@@ -2162,7 +2163,11 @@ class SchedaTVListView(LoginRequiredMixin, ListView):
 
         #DEBUG print(zona)
         # Filtro per tipo documento
-        queryset = queryset.filter(tipo_documento_id=tipo_documento_id, cliente__zona__in=zona, data__range=(data_inizio, data_fine)).order_by('cliente__nome')
+        queryset = queryset.filter(
+            tipo_documento_id=tipo_documento_id,
+            cliente__zona__in=zona,
+            data__range=(data_inizio, data_fine),
+        ).order_by(F('cliente__ordine_ntv').asc(nulls_last=True), 'cliente__nome', 'pk')
         return queryset
 
     def get_context_data(self, **kwargs):
@@ -2199,7 +2204,11 @@ class SchedaTVListView(LoginRequiredMixin, ListView):
             if not zone:
                 zone = Zona.objects.none()
             tipo = TipoDocumento.objects.none()
-        schede = SchedaTV.objects.filter(tipo_documento_id=tipo, cliente__zona__in=zone, data__range=(data_inizio, data_fine)).order_by("cliente__nome")
+        schede = SchedaTV.objects.filter(
+            tipo_documento_id=tipo,
+            cliente__zona__in=zone,
+            data__range=(data_inizio, data_fine),
+        ).order_by(F('cliente__ordine_ntv').asc(nulls_last=True), 'cliente__nome', 'pk')
         context['schede_tv'] = schede
         mesi_italiani = {
             "Gennaio": "01", "Febbraio": "02", "Marzo": "03",
@@ -2293,6 +2302,25 @@ class SchedaTVUpdateView(LoginRequiredMixin, UpdateView):
         context['categorie'] = Categoria.objects.prefetch_related(
             Prefetch('articoli', queryset=Articolo.objects.filter(pk__in=articoli_concessi).order_by('nome'))
         ).order_by('ordine')
+
+        sequenza = SchedaTV.objects.filter(
+            tipo_documento=self.object.tipo_documento,
+            data=self.object.data,
+            cliente__zona=self.object.cliente.zona,
+            cliente__ordine_ntv__isnull=False,
+        ).order_by(F('cliente__ordine_ntv').asc(nulls_last=True), 'cliente__nome', 'pk')
+        sequenza_ids = list(sequenza.values_list('pk', flat=True))
+        if self.object.pk in sequenza_ids:
+            indice = sequenza_ids.index(self.object.pk)
+            context['sequence_index'] = indice + 1
+            context['sequence_total'] = len(sequenza_ids)
+            context['previous_scheda'] = sequenza[indice - 1] if indice else None
+            context['next_scheda'] = sequenza[indice + 1] if indice + 1 < len(sequenza_ids) else None
+        else:
+            context['sequence_index'] = None
+            context['sequence_total'] = 0
+            context['previous_scheda'] = None
+            context['next_scheda'] = None
         return context
 
     def post(self, request, *args, **kwargs):
@@ -2390,6 +2418,75 @@ class RigaSchedaTVDeleteView(LoginRequiredMixin, DeleteView):
     def get_success_url(self):
         return reverse_lazy('schedatv-update', kwargs={'pk': self.object.scheda.pk})
 
+
+class OrdineNTVView(LoginRequiredMixin, View):
+    template_name = 'schede_tv/ordine_ntv.html'
+
+    def get_zone_queryset(self):
+        user = self.request.user
+        if hasattr(user, 'zona'):
+            return Zona.objects.filter(pk=user.zona.pk)
+        if hasattr(user, 'concessionario'):
+            return Zona.objects.filter(concessionario=user.concessionario)
+        return Zona.objects.none()
+
+    def get_clienti(self):
+        return Cliente.objects.filter(
+            tipo_documento_predefinito__nome='NTV',
+            ignorare=False,
+            zona__in=self.get_zone_queryset(),
+        ).select_related('zona').order_by(F('ordine_ntv').asc(nulls_last=True), 'nome', 'pk')
+
+    def get(self, request):
+        return render(request, self.template_name, {'clienti': self.get_clienti()})
+
+    def post(self, request):
+        clienti = list(self.get_clienti())
+        valori = {}
+        errori = []
+        valori_per_zona = {}
+
+        for cliente in clienti:
+            valore = request.POST.get(f'ordine_{cliente.pk}', '').strip()
+            if not valore:
+                valori[cliente.pk] = None
+                continue
+            try:
+                ordine = int(valore)
+            except ValueError:
+                errori.append(f'{cliente.nome}: inserire un numero intero positivo oppure lasciare vuoto.')
+                continue
+            if ordine < 1:
+                errori.append(f'{cliente.nome}: l\'ordine deve essere maggiore o uguale a 1.')
+                continue
+            valori[cliente.pk] = ordine
+            chiave = (cliente.zona_id, ordine)
+            if chiave in valori_per_zona:
+                altro = valori_per_zona[chiave]
+                errori.append(f'Ordine {ordine} duplicato nella zona {cliente.zona.nome}: {altro} e {cliente.nome}.')
+            else:
+                valori_per_zona[chiave] = cliente.nome
+
+        if errori:
+            for errore in errori:
+                messages.error(request, errore)
+            return render(request, self.template_name, {'clienti': clienti})
+
+        try:
+            with transaction.atomic():
+                clienti_ids = [cliente.pk for cliente in clienti]
+                # Svuotare temporaneamente i valori permette anche di scambiare due posizioni
+                # senza violare il vincolo di unicita' nel corso del salvataggio.
+                Cliente.objects.select_for_update().filter(pk__in=clienti_ids).update(ordine_ntv=None)
+                for cliente in clienti:
+                    Cliente.objects.filter(pk=cliente.pk).update(ordine_ntv=valori[cliente.pk])
+        except IntegrityError:
+            messages.error(request, 'Impossibile salvare l\'ordine: verificare che non esistano valori duplicati nella zona.')
+            return render(request, self.template_name, {'clienti': clienti})
+
+        messages.success(request, 'Ordine NTV salvato.')
+        return redirect('ordine-ntv')
+
 class CreaSchedeTV(View):
     template_name = "schede_tv/crea_schede.html"
     success_url = reverse_lazy('schedetv-list')
@@ -2438,6 +2535,9 @@ class CreaSchedeTV(View):
 
 
 class CreaFattureAuto(LoginRequiredMixin, View):
+    # TODO(ordine_ntv): riutilizzare l'ordine operativo NTV nella fatturazione
+    # solo dopo avere corretto numerazione, break, duplicati mensili, coerenza
+    # anteprima/conferma e ordinamento deterministico di lista e PDF.
     template_name = "fatture/crea_fatture.html"
     success_url = reverse_lazy('fatture-list')
     login_url = "/login/"

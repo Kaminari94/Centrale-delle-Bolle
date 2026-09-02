@@ -1,0 +1,39 @@
+{% extends 'bolle/homepage.html' %}
+
+{% block title %}Ordine NTV{% endblock %}
+
+{% block content %}
+<h1>Ordine NTV</h1>
+<p>Imposta l'ordine fisico del raccoglitore. Lascia vuoto un valore non ancora configurato.</p>
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert {% if message.tags == 'error' %}alert-danger{% else %}alert-success{% endif %}">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+<form method="post">
+    {% csrf_token %}
+    <div class="table-responsive">
+        <table class="table table-bordered align-middle">
+            <thead>
+                <tr><th>Ordine</th><th>Codice cliente</th><th>Nome cliente</th><th>Zona</th></tr>
+            </thead>
+            <tbody>
+                {% for cliente in clienti %}
+                    <tr>
+                        <td><input type="number" min="1" name="ordine_{{ cliente.pk }}" value="{{ cliente.ordine_ntv|default_if_none:'' }}" class="form-control"></td>
+                        <td>{{ cliente.codice }}</td>
+                        <td>{{ cliente.nome }}</td>
+                        <td>{{ cliente.zona.nome }}</td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="4" class="text-center">Nessun cliente NTV non ignorato nella zona accessibile.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <button type="submit" class="btn btn-primary">Salva ordine</button>
+    <a href="{% url 'schedetv-list' %}" class="btn btn-secondary">Torna alle SchedeTV</a>
+</form>
+{% endblock %}

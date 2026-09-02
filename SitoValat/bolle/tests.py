@@ -1,7 +1,7 @@
 from django.test import RequestFactory, TestCase
 from django.test.utils import CaptureQueriesContext
-from django.db import connection
-from django.core.exceptions import PermissionDenied
+from django.db import connection, IntegrityError, transaction
+from django.core.exceptions import PermissionDenied, ValidationError
 from datetime import datetime, timedelta
 from decimal import Decimal
 from django.utils import timezone
@@ -480,4 +480,152 @@ class AnnualCountersTests(TestCase):
 
         c2026 = TipoDocCounter.objects.get(tipo=self.tipo_doc_NTV, anno=2026)
         self.assertEqual(c2026.ultimo_numero, 1)
+
+
+class OrdineNTVTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username='operatore-eboli', password='test-password')
+        self.user_seconda_zona = User.objects.create_user(username='operatore-seconda-zona', password='test-password')
+        self.conc = Concessionario.objects.create(
+            nome='Concessionario', indirizzo='Via Roma', via='Via Roma', cap='84025',
+            citta='Eboli', provincia='SA', partita_iva='IT00000000001',
+        )
+        self.zona = Zona.objects.create(nome='Eboli', concessionario=self.conc, user=self.user)
+        self.zona_seconda = Zona.objects.create(
+            nome='Seconda zona', concessionario=self.conc, user=self.user_seconda_zona,
+        )
+        self.tipo_ntv = TipoDocumento.objects.create(nome='NTV', concessionario=self.conc)
+        self.tipo_nt = TipoDocumento.objects.create(nome='NT', concessionario=self.conc)
+
+    def cliente(self, nome, zona=None, ordine_ntv=None, tipo=None, ignorare=False):
+        return Cliente.objects.create(
+            nome=nome,
+            codice=nome[:10],
+            concessionario=self.conc,
+            via='Via Test', cap='84025', citta='Eboli', provincia='SA', piva=f'IT{nome}',
+            pec='test@example.com',
+            zona=zona or self.zona,
+            tipo_documento_predefinito=tipo or self.tipo_ntv,
+            ordine_ntv=ordine_ntv,
+            ignorare=ignorare,
+        )
+
+    def scheda(self, cliente):
+        return SchedaTV.objects.create(
+            cliente=cliente,
+            tipo_documento=self.tipo_ntv,
+            data=datetime(2026, 9, 1).date(),
+        )
+
+    def test_ordine_ntv_null_e_positivo_sono_validi(self):
+        senza_ordine = self.cliente('Senza ordine')
+        con_ordine = self.cliente('Con ordine', ordine_ntv=10)
+
+        senza_ordine.full_clean()
+        con_ordine.full_clean()
+        self.assertIsNone(senza_ordine.ordine_ntv)
+        self.assertEqual(con_ordine.ordine_ntv, 10)
+
+    def test_ordine_ntv_zero_non_e_valido(self):
+        cliente = self.cliente('Ordine zero')
+        cliente.ordine_ntv = 0
+
+        with self.assertRaises(ValidationError):
+            cliente.full_clean()
+
+    def test_ordine_ntv_non_ntv_non_e_valido(self):
+        cliente = self.cliente('Cliente NT', ordine_ntv=10, tipo=self.tipo_nt)
+
+        with self.assertRaises(ValidationError):
+            cliente.full_clean()
+
+    def test_ordine_ntv_duplicato_nella_stessa_zona_non_e_consentito(self):
+        self.cliente('Primo', ordine_ntv=10)
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                self.cliente('Secondo', ordine_ntv=10)
+
+    def test_stesso_ordine_in_zone_diverse_e_consentito(self):
+        primo = self.cliente('Eboli', ordine_ntv=10)
+        secondo = self.cliente('Altra zona', zona=self.zona_seconda, ordine_ntv=10)
+
+        self.assertEqual(primo.ordine_ntv, secondo.ordine_ntv)
+
+    def test_pagina_ordine_salva_e_permette_scambiare_posizioni(self):
+        primo = self.cliente('Primo', ordine_ntv=10)
+        secondo = self.cliente('Secondo', ordine_ntv=20)
+        self.client.force_login(self.user)
+
+        response = self.client.post(reverse('ordine-ntv'), {
+            f'ordine_{primo.pk}': '20',
+            f'ordine_{secondo.pk}': '10',
+        }, follow=True)
+
+        primo.refresh_from_db()
+        secondo.refresh_from_db()
+        self.assertEqual(primo.ordine_ntv, 20)
+        self.assertEqual(secondo.ordine_ntv, 10)
+        self.assertContains(response, 'Ordine NTV salvato.')
+
+    def test_pagina_ordine_rifiuta_duplicati_senza_modificare_dati(self):
+        primo = self.cliente('Primo', ordine_ntv=10)
+        secondo = self.cliente('Secondo', ordine_ntv=20)
+        self.client.force_login(self.user)
+
+        response = self.client.post(reverse('ordine-ntv'), {
+            f'ordine_{primo.pk}': '10',
+            f'ordine_{secondo.pk}': '10',
+        })
+
+        primo.refresh_from_db()
+        secondo.refresh_from_db()
+        self.assertEqual(primo.ordine_ntv, 10)
+        self.assertEqual(secondo.ordine_ntv, 20)
+        self.assertContains(response, 'duplicato nella zona Eboli')
+
+    def test_lista_schedetv_ordina_per_ordine_ntv_con_null_in_fondo(self):
+        ultimo = self.scheda(self.cliente('Senza ordine'))
+        secondo = self.scheda(self.cliente('Secondo', ordine_ntv=20))
+        primo = self.scheda(self.cliente('Primo', ordine_ntv=10))
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('schedetv-list'), {
+            'data_inizio': '2026-09-01', 'data_fine': '2026-09-30',
+        })
+
+        self.assertEqual(list(response.context['schede_tv']), [primo, secondo, ultimo])
+        self.assertContains(response, 'Ordine da configurare')
+
+    def test_precedente_prossimo_e_contatore_usano_solo_clienti_ordinati(self):
+        precedente = self.scheda(self.cliente('Primo', ordine_ntv=10))
+        corrente = self.scheda(self.cliente('Secondo', ordine_ntv=20))
+        self.scheda(self.cliente('Senza ordine'))
+        successiva = self.scheda(self.cliente('Terzo', ordine_ntv=30))
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('schedatv-update', kwargs={'pk': corrente.pk}))
+
+        self.assertEqual(response.context['sequence_index'], 2)
+        self.assertEqual(response.context['sequence_total'], 3)
+        self.assertEqual(response.context['previous_scheda'], precedente)
+        self.assertEqual(response.context['next_scheda'], successiva)
+        self.assertContains(response, 'Cliente 2 di 3')
+
+        response_primo = self.client.get(reverse('schedatv-update', kwargs={'pk': precedente.pk}))
+        self.assertEqual(response_primo.status_code, 200)
+        self.assertContains(response_primo, 'Cliente 1 di 3')
+
+    def test_scheda_senza_ordine_non_entra_nella_sequenza_ma_resta_accessibile(self):
+        senza_ordine = self.scheda(self.cliente('Senza ordine'))
+        self.scheda(self.cliente('Ordinato', ordine_ntv=10))
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('schedatv-update', kwargs={'pk': senza_ordine.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context['sequence_index'])
+        self.assertEqual(response.context['sequence_total'], 0)
+        self.assertContains(response, 'Ordine NTV da configurare')
 

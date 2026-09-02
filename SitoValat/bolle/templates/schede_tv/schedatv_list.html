@@ -3,7 +3,7 @@
 {% block title %}Lista Schede Tentata Vendita{% endblock %}
 
 {% block content %}
-<h1>Lista Schede Tentata Vendita <a href="{% url 'schedatv-create' %}" class="btn btn-lg btn-gradient text-white"><i class="bi bi-file-earmark-plus"></i> Nuovo</a></h1>
+<h1>Lista Schede Tentata Vendita <a href="{% url 'schedatv-create' %}" class="btn btn-lg btn-gradient text-white"><i class="bi bi-file-earmark-plus"></i> Nuovo</a> <a href="{% url 'ordine-ntv' %}" class="btn btn-lg btn-dark">Ordine NTV</a></h1>
 
     <form method="get" action="{% url 'crea-schede'%}">
         <label for="mese" class="h4">Creazione automatica schede TV:</label>
@@ -84,6 +84,7 @@
             <!--<th>#</th>-->
             <th>Zona</th>
             <th>Cliente</th>
+            <th>Ordine NTV</th>
             <th>Numero</th>
             <th>Mese</th>
             <th>Azioni</th>
@@ -95,6 +96,7 @@
                 <!--<td>{{ forloop.counter }}</td>-->
                 <td>{{ scheda_tv.cliente.zona.nome|default:"-" }}</td>
                 <td><a style="color: black; text-decoration: none;" href="{% url 'schedatv-detail' scheda_tv.pk %}">{{ scheda_tv.cliente.nome }}<br>{{ scheda_tv.cliente.indirizzo }}</a></td>
+                <td>{% if scheda_tv.cliente.ordine_ntv %}{{ scheda_tv.cliente.ordine_ntv }}{% else %}<span class="text-warning">Ordine da configurare</span>{% endif %}</td>
                 <td>{{ scheda_tv.numero|default:"-" }}</td>
                 <td>{{ scheda_tv.data|date:"F Y" }}</td>
                 <td>
@@ -119,7 +121,7 @@
     {% for scheda_tv in schede_tv %}
 <div class="card">
   <div class="card-header">
-    <span style="float: left;">{{ scheda_tv.cliente.zona.nome|default:"-" }} | {{ scheda_tv.numero }}</span> <span style="float: right;">{{ scheda_tv.data|date:"F Y" }}</span>
+    <span style="float: left;">{{ scheda_tv.cliente.zona.nome|default:"-" }} | {{ scheda_tv.numero }}</span> <span style="float: right;">{% if scheda_tv.cliente.ordine_ntv %}Ord. {{ scheda_tv.cliente.ordine_ntv }}{% else %}Ordine da configurare{% endif %}</span>
   </div>
   <div class="card-body">
     <h5 class="card-title"><a style="color: black; text-decoration: none;" href="{% url 'schedatv-detail' scheda_tv.pk %}"><strong>{{ scheda_tv.cliente.nome }}</strong></a></strong></h5>
