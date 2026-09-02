@@ -25,6 +25,9 @@ from .models import (
     RigaCarico,
     RigaBolla,
     Fornitore,
+    TipoFattura,
+    Fattura,
+    current_year,
 )
 from .utils.riepilogo import calcola_riep_giornaliero
 
@@ -480,6 +483,42 @@ class AnnualCountersTests(TestCase):
 
         c2026 = TipoDocCounter.objects.get(tipo=self.tipo_doc_NTV, anno=2026)
         self.assertEqual(c2026.ultimo_numero, 1)
+
+
+class TipoFatturaDefaultAndNumberingTests(TestCase):
+    def setUp(self):
+        self.conc = Concessionario.objects.create(
+            nome='Concessionario fatture', indirizzo='Via Roma', via='Via Roma', cap='84025',
+            citta='Eboli', provincia='SA', partita_iva='IT00000000002',
+        )
+        self.cliente = Cliente.objects.create(
+            nome='Cliente fatture', concessionario=self.conc, via='Via Test', cap='84025',
+            citta='Eboli', provincia='SA', piva='IT00000000002', pec='test@example.com',
+        )
+
+    def test_tipo_fattura_usa_l_anno_corrente_alla_creazione(self):
+        tipo = TipoFattura.objects.create(tipo='TD01', descrizione='Fattura', concessionario=self.conc)
+
+        self.assertEqual(tipo.anno, current_year())
+
+    def test_numerazione_fatture_resta_progressiva(self):
+        tipo = TipoFattura.objects.create(tipo='TD01', descrizione='Fattura', concessionario=self.conc)
+        oggi = timezone.localdate()
+        comune = {
+            'cliente': self.cliente,
+            'concessionario': self.conc,
+            'tipo_fattura': tipo,
+            'data': oggi,
+            'condizioni_pagamento': 'TP02',
+            'scadenza_pagamento': oggi,
+            'modalita_pagamento': 'MP01',
+        }
+
+        prima = Fattura.objects.create(**comune)
+        seconda = Fattura.objects.create(**comune)
+
+        self.assertEqual(prima.numero, '1')
+        self.assertEqual(seconda.numero, '2')
 
 
 class OrdineNTVTests(TestCase):

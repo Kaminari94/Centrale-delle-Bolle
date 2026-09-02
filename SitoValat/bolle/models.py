@@ -12,6 +12,11 @@ from django.utils import timezone
 def get_aware_datetime():
     return make_aware(datetime.now())
 
+
+def current_year():
+    """Restituisce l'anno locale al momento della creazione del record."""
+    return timezone.localdate().year
+
 class Articolo(models.Model):
     IVA_SCELTE = [
         (4, '4%'),
@@ -298,7 +303,7 @@ class TipoFattura(models.Model):
     ]
     tipo = models.CharField(max_length=5, choices=TIPO_SCELTE) # Nome breve
     descrizione = models.CharField(max_length=255, blank=True, null=True)
-    anno = models.PositiveIntegerField(default=datetime.today().year)
+    anno = models.PositiveIntegerField(default=current_year)
     ultimo_numero = models.PositiveIntegerField(default=0)
     concessionario = models.ForeignKey('Concessionario', on_delete=models.CASCADE)
 
