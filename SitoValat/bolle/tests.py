@@ -1,3 +1,6 @@
+from io import BytesIO
+from unittest.mock import patch
+
 from django.test import RequestFactory, TestCase
 from django.test.utils import CaptureQueriesContext
 from django.db import connection, IntegrityError, transaction
@@ -7,6 +10,7 @@ from decimal import Decimal
 from django.utils import timezone
 from django.urls import reverse
 from django.contrib.auth import get_user_model
+from PyPDF2 import PdfReader
 
 from .models import (
     Concessionario,
@@ -667,4 +671,98 @@ class OrdineNTVTests(TestCase):
         self.assertIsNone(response.context['sequence_index'])
         self.assertEqual(response.context['sequence_total'], 0)
         self.assertContains(response, 'Ordine NTV da configurare')
+
+
+class FattureCumulativePdfOrderingTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.conc = Concessionario.objects.create(
+            nome='Concessionario PDF', indirizzo='Via Roma', via='Via Roma', cap='84025',
+            citta='Eboli', provincia='SA', partita_iva='IT00000000003',
+        )
+        self.zona_1 = Zona.objects.create(
+            nome='Prima zona', concessionario=self.conc,
+            user=User.objects.create_user(username='pdf-zona-1', password='test-password'),
+        )
+        self.zona_2 = Zona.objects.create(
+            nome='Seconda zona', concessionario=self.conc,
+            user=User.objects.create_user(username='pdf-zona-2', password='test-password'),
+        )
+        self.tipo_ntv = TipoDocumento.objects.create(nome='NTV', concessionario=self.conc)
+        self.tipo_nt = TipoDocumento.objects.create(nome='NT', concessionario=self.conc)
+        self.tipo_fattura = TipoFattura.objects.create(
+            tipo='TD01', descrizione='Fattura', anno=2026, concessionario=self.conc,
+        )
+        self.tipo_nota_credito = TipoFattura.objects.create(
+            tipo='TD04', descrizione='Nota di Credito', anno=2026, concessionario=self.conc,
+        )
+
+    def cliente(self, nome, zona, tipo_documento, ordine_ntv=None):
+        return Cliente.objects.create(
+            nome=nome, concessionario=self.conc, via='Via Test', cap='84025',
+            citta='Eboli', provincia='SA', piva=f'IT-{nome}', pec='test@example.com',
+            zona=zona, tipo_documento_predefinito=tipo_documento, ordine_ntv=ordine_ntv,
+        )
+
+    def fattura(self, cliente, tipo_fattura, giorno, numero):
+        fattura = Fattura.objects.create(
+            cliente=cliente, concessionario=self.conc, tipo_fattura=tipo_fattura,
+            data=datetime(2026, 9, giorno).date(), condizioni_pagamento='TP02',
+            scadenza_pagamento=datetime(2026, 9, giorno).date(), modalita_pagamento='MP01',
+        )
+        Fattura.objects.filter(pk=fattura.pk).update(numero=numero)
+        fattura.refresh_from_db()
+        return fattura
+
+    def test_pdf_cumulativo_ordina_gruppi_e_mantiene_pagine_consecutive(self):
+        ntv_zona_1 = self.cliente('NTV zona 1', self.zona_1, self.tipo_ntv, ordine_ntv=10)
+        ntv_zona_2 = self.cliente('NTV zona 2', self.zona_2, self.tipo_ntv, ordine_ntv=10)
+        ntv_senza_ordine = self.cliente('NTV senza ordine', self.zona_1, self.tipo_ntv)
+        cliente_nt = self.cliente('Cliente NT', self.zona_1, self.tipo_nt)
+
+        prima_stesso_cliente = self.fattura(ntv_zona_1, self.tipo_fattura, 2, '10')
+        seconda_stesso_cliente = self.fattura(ntv_zona_1, self.tipo_fattura, 2, '2')
+        ordinata_altra_zona = self.fattura(ntv_zona_2, self.tipo_fattura, 1, '1')
+        senza_ordine = self.fattura(ntv_senza_ordine, self.tipo_fattura, 1, '1')
+        fattura_nt = self.fattura(cliente_nt, self.tipo_fattura, 1, '1')
+        nota_credito_ntv = self.fattura(ntv_zona_1, self.tipo_nota_credito, 1, '1')
+
+        selezionate = set(Fattura.objects.filter(data__month=9, data__year=2026).values_list('pk', flat=True))
+        viste = []
+
+        def disegna_fattura_di_prova(canvas, fattura):
+            viste.append(fattura.pk)
+            canvas.drawString(20, 800, f'fattura:{fattura.pk}:pagina:1')
+            if fattura.pk == prima_stesso_cliente.pk:
+                canvas.showPage()
+                canvas.drawString(20, 800, f'fattura:{fattura.pk}:pagina:2')
+
+        with patch('bolle.views.disegna_fattura', side_effect=disegna_fattura_di_prova):
+            response = self.client.get(reverse('scarica-tutte-pdf'), {
+                'data_inizio': '01 Settembre 2026',
+                'data_fine': '30 Settembre 2026',
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(set(viste), selezionate)
+        self.assertEqual(len(viste), len(selezionate))
+        self.assertEqual(
+            viste,
+            [prima_stesso_cliente.pk, seconda_stesso_cliente.pk, ordinata_altra_zona.pk,
+             senza_ordine.pk, fattura_nt.pk, nota_credito_ntv.pk],
+        )
+
+        pagine = [pagina.extract_text().strip() for pagina in PdfReader(BytesIO(response.content)).pages]
+        self.assertEqual(
+            pagine,
+            [
+                f'fattura:{prima_stesso_cliente.pk}:pagina:1',
+                f'fattura:{prima_stesso_cliente.pk}:pagina:2',
+                f'fattura:{seconda_stesso_cliente.pk}:pagina:1',
+                f'fattura:{ordinata_altra_zona.pk}:pagina:1',
+                f'fattura:{senza_ordine.pk}:pagina:1',
+                f'fattura:{fattura_nt.pk}:pagina:1',
+                f'fattura:{nota_credito_ntv.pk}:pagina:1',
+            ],
+        )
 

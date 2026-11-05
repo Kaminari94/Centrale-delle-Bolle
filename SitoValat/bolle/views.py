@@ -30,7 +30,7 @@ from pdfminer.high_level import extract_text
 from django.http import FileResponse
 import os
 from django.utils.timezone import make_aware, now, is_aware
-from django.db.models import Sum, Q, F
+from django.db.models import Case, F, IntegerField, Q, Sum, When
 from django.db import IntegrityError
 from django.utils import timezone
 from django.conf import settings
@@ -1683,6 +1683,46 @@ def scarica_tutte_fatture_pdf(request):
     queryset = Fattura.objects.filter(data__range=(data_inizio, data_fine))
     if tipo_fattura_id:
         queryset = queryset.filter(tipo_fattura__id=tipo_fattura_id)
+
+    # La sequenza operativa NTV e' definita sul cliente e vale per zona.
+    # Le note di credito restano sempre nel gruppo finale, anche per NTV.
+    queryset = queryset.annotate(
+        _pdf_gruppo=Case(
+            When(
+                tipo_fattura__tipo='TD01',
+                cliente__tipo_documento_predefinito__nome='NTV',
+                cliente__ordine_ntv__isnull=False,
+                then=0,
+            ),
+            When(
+                tipo_fattura__tipo='TD01',
+                cliente__tipo_documento_predefinito__nome='NTV',
+                cliente__ordine_ntv__isnull=True,
+                then=1,
+            ),
+            default=2,
+            output_field=IntegerField(),
+        ),
+        _pdf_ordine_ntv=Case(
+            When(
+                tipo_fattura__tipo='TD01',
+                cliente__tipo_documento_predefinito__nome='NTV',
+                cliente__ordine_ntv__isnull=False,
+                then=F('cliente__ordine_ntv'),
+            ),
+            default=None,
+            output_field=IntegerField(),
+        ),
+    ).order_by(
+        '_pdf_gruppo',
+        'cliente__zona_id',
+        F('_pdf_ordine_ntv').asc(nulls_last=True),
+        'cliente__nome',
+        'cliente_id',
+        'data',
+        'numero',
+        'pk',
+    )
 
     # Se non ci sono fatture, restituisce un errore
     if not queryset.exists():
