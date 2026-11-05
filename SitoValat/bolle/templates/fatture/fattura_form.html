@@ -41,8 +41,10 @@
     <input type="number" step="0.01" name="prezzo" class="form-control" placeholder="Automatico se vuoto">
 
     <button type="submit" name="add_riga" class="btn btn-success mt-2 mb-2 w-100">Aggiungi</button>
+    {% if puo_recuperare_totali_cls %}
     Oppure...
     <h4>Recupera Totali</h4>
+    <p class="text-muted small">Il mese e l'anno selezionati indicano il periodo delle bolle CLS da recuperare. Se esiste giÃ  almeno una riga recuperata per quel periodo, il comando non aggiorna nÃ© aggiunge righe. Le Diciture giÃ  presenti restano invariate e non impediscono il recupero; altre righe non marcate richiedono lo svuotamento esplicito della fattura.</p>
     <div class="row g-3 align-items-end mb-4">
         <div class="col-md-6 col-6">
             <label for="mese">Seleziona un mese:</label>
@@ -64,6 +66,7 @@
         <button type="submit" name="recupera_totali" class="btn btn-success mt-2 w-100">Recupera Totali</button>
         </div>
     </div>
+    {% endif %}
 </form>
 
 {% if messages %}
@@ -156,6 +159,14 @@
     </tbody>
 </table>
 </div>
+
+{% if righe %}
+<form method="post" class="mb-3" onsubmit="return confirm('Eliminare tutte le righe di questa fattura? L\'operazione non puÃ² essere annullata.');">
+    {% csrf_token %}
+    <input type="hidden" name="categoria" value="{{ categoria_selezionata }}">
+    <button type="submit" name="svuota_righe" class="btn btn-danger">Elimina tutte le righe della fattura</button>
+</form>
+{% endif %}
 
 {{ articoli_descrizioni|json_script:"articoli-descrizioni" }}
 <script>

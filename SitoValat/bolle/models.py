@@ -1,5 +1,6 @@
 from django.db import models
 from django.db import transaction
+from django.conf import settings
 from django.contrib.auth.models import User
 from datetime import datetime
 from django.core.exceptions import ValidationError
@@ -126,6 +127,15 @@ class Cliente(models.Model):
 
     def __str__(self):
         return f"{self.tipo_documento_predefinito} | {self.nome} - {self.via}"
+
+
+def is_cliente_centrale_latte(cliente):
+    """Riconosce il cliente configurato, senza euristiche sull'anagrafica."""
+    cliente_id = getattr(settings, 'CLIENTE_CENTRALE_LATTE_ID', None)
+    if not isinstance(cliente_id, int) or cliente_id <= 0:
+        return False
+    # Verifica anche che l'ID configurato corrisponda a un record esistente.
+    return cliente.pk == cliente_id and Cliente.objects.filter(pk=cliente_id).exists()
 
 class RigaBolla(models.Model):
     bolla = models.ForeignKey('Bolla', on_delete=models.CASCADE, related_name='righe')  # Relazione con Bolla
@@ -445,6 +455,9 @@ class RigaFattura(models.Model):
     numero_linea = models.CharField(max_length=4, null=True, blank=True)
     fattura = models.ForeignKey('Fattura', on_delete=models.CASCADE, related_name="righe")
     articolo = models.ForeignKey('Articolo', on_delete=models.CASCADE)
+    # Valorizzato solo dalle righe create dal recupero mensile CLS; consente
+    # di rendere l'operazione ripetibile senza toccare righe manuali.
+    recupero_cls_periodo = models.DateField(null=True, blank=True, db_index=True)
     # NULL identifica esclusivamente una riga storica senza testo documentale noto.
     # La stringa vuota e' invece uno snapshot intenzionalmente vuoto.
     descrizione_snapshot = models.TextField(null=True, blank=True)
@@ -455,6 +468,17 @@ class RigaFattura(models.Model):
     tot_iva = models.DecimalField(max_digits=20, decimal_places=3, default=0.0)
 
     objects = RigaFatturaManager()
+
+    class Meta:
+        constraints = [
+            # La marcatura e' l'unica memoria del recupero: per una fattura,
+            # un periodo e un articolo non possono esistere due righe CLS.
+            models.UniqueConstraint(
+                fields=['fattura', 'recupero_cls_periodo', 'articolo'],
+                condition=models.Q(recupero_cls_periodo__isnull=False),
+                name='uniq_riga_cls_fattura_periodo_articolo',
+            ),
+        ]
 
     @property
     def descrizione_documento(self):

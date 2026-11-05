@@ -1,7 +1,7 @@
 from io import BytesIO
 from unittest.mock import patch
 
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.db import connection, IntegrityError, transaction
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -782,7 +782,8 @@ class RigaFatturaDescrizioneSnapshotTests(TestCase):
         self.diciture = Categoria.objects.create(nome='Diciture')
         self.articolo = Articolo.objects.create(
             nome='ART-DESC', descrizione='Testo & <originale>\nseconda riga',
-            categoria=self.categoria, iva=22, prezzo=Decimal('4.500'), costo=Decimal('1.000'),
+            categoria=self.categoria, iva=22, prezzo=Decimal('4.500'), prezzo_tr=Decimal('5.250'),
+            costo=Decimal('1.000'),
         )
         self.altro_articolo = Articolo.objects.create(
             nome='ART-ALTRO', descrizione='Descrizione proposta nuova',
@@ -793,6 +794,8 @@ class RigaFatturaDescrizioneSnapshotTests(TestCase):
             iva=22, prezzo=Decimal('0.000'), costo=Decimal('0.000'),
         )
         self.tipo_documento = TipoDocumento.objects.create(nome='NT', concessionario=self.conc)
+        self.tipo_rf = TipoDocumento.objects.create(nome='RF', concessionario=self.conc)
+        self.tipo_cls = TipoDocumento.objects.create(nome='CLS', concessionario=self.conc)
         self.cliente = Cliente.objects.create(
             nome='Cliente descrizioni', concessionario=self.conc, via='Via Test', cap='84025',
             citta='Eboli', provincia='SA', piva='IT00000000004', pec='test@example.com',
@@ -806,6 +809,21 @@ class RigaFatturaDescrizioneSnapshotTests(TestCase):
             data=datetime(2026, 9, 30).date(), condizioni_pagamento='TP02',
             scadenza_pagamento=datetime(2026, 9, 30).date(), modalita_pagamento='MP01',
         )
+        self.centrale = Cliente.objects.create(
+            nome="Centrale del Latte d'Italia", concessionario=self.conc, via='Via Centrale', cap='84025',
+            citta='Eboli', provincia='SA', piva='01934250018', pec='centrale@example.com',
+            zona=self.zona, tipo_documento_predefinito=self.tipo_rf,
+        )
+        self.fattura_cls = Fattura.objects.create(
+            cliente=self.centrale, concessionario=self.conc, tipo_fattura=self.tipo_fattura,
+            data=datetime(2026, 9, 30).date(), condizioni_pagamento='TP02',
+            scadenza_pagamento=datetime(2026, 9, 30).date(), modalita_pagamento='MP01',
+        )
+        self._centrale_setting = override_settings(
+            CLIENTE_CENTRALE_LATTE_ID=self.centrale.pk,
+        )
+        self._centrale_setting.enable()
+        self.addCleanup(self._centrale_setting.disable)
 
     def riga(self, articolo=None, **kwargs):
         return RigaFattura.objects.create(
@@ -877,17 +895,227 @@ class RigaFatturaDescrizioneSnapshotTests(TestCase):
         self.assertFalse(riga.descrizione_da_fallback)
         self.assertEqual(riga.descrizione_snapshot, 'Fallback corrente')
 
-    def test_recupero_totali_non_modifica_snapshot_gia_salvati(self):
+    def test_recupero_totali_e_rifiutato_per_clienti_diversi_da_centrale(self):
         riga = self.riga(descrizione_snapshot='Testo già salvato')
         self.client.force_login(self.user)
 
+        pagina = self.client.get(reverse('fattura-update', kwargs={'pk': self.fattura.pk}))
+        self.assertNotContains(pagina, 'Recupera Totali')
         response = self.client.post(reverse('fattura-update', kwargs={'pk': self.fattura.pk}), {
+            'recupera_totali': '1', 'mese': '9', 'anno': '2026', 'categoria': '0',
+        }, follow=True)
+
+        self.assertContains(response, 'non è disponibile per questa fattura')
+        riga.refresh_from_db()
+        self.assertEqual(riga.descrizione_snapshot, 'Testo già salvato')
+
+    def test_recupero_cls_ripetuto_non_duplica_e_preserva_righe_esistenti(self):
+        self.articolo.iva = 10
+        self.articolo.save()
+        Bolla.objects.create(
+            cliente=self.cliente,
+            tipo_documento=self.tipo_cls,
+            data=timezone.make_aware(datetime(2026, 9, 15, 10)),
+        )
+        bolla = Bolla.objects.latest('pk')
+        RigaBolla.objects.create(bolla=bolla, articolo=self.articolo, quantita=2)
+        self.client.force_login(self.user)
+
+        pagina = self.client.get(reverse('fattura-update', kwargs={'pk': self.fattura_cls.pk}))
+        self.assertContains(pagina, 'Recupera Totali')
+        response = self.client.post(reverse('fattura-update', kwargs={'pk': self.fattura_cls.pk}), {
+            'recupera_totali': '1', 'mese': '9', 'anno': '2026', 'categoria': '0',
+        })
+        self.assertEqual(response.status_code, 302)
+        recuperata = RigaFattura.objects.get(
+            fattura=self.fattura_cls,
+            recupero_cls_periodo=datetime(2026, 9, 1).date(),
+        )
+        self.assertEqual(recuperata.quantita, 2)
+        self.assertEqual(recuperata.prezzo, Decimal('5.250'))
+        self.assertEqual(recuperata.iva, 22)
+        self.assertEqual(recuperata.descrizione_snapshot, self.articolo.descrizione)
+        manuale = RigaFattura.objects.create(
+            fattura=self.fattura_cls, articolo=self.altro_articolo, quantita=1,
+            prezzo=Decimal('3.000'), iva=10, descrizione_snapshot='Manuale personalizzata',
+        )
+        dicitura = RigaFattura.objects.create(
+            fattura=self.fattura_cls, articolo=self.dicitura, quantita=1,
+            prezzo=Decimal('0.000'), iva=22, descrizione_snapshot='Dicitura manuale',
+        )
+        self.assertIsNone(manuale.recupero_cls_periodo)
+        self.assertIsNone(dicitura.recupero_cls_periodo)
+
+        recuperata.prezzo = Decimal('8.000')
+        recuperata.descrizione_snapshot = 'Recuperata poi personalizzata'
+        recuperata.save()
+        response = self.client.post(reverse('fattura-update', kwargs={'pk': self.fattura_cls.pk}), {
+            'recupera_totali': '1', 'mese': '9', 'anno': '2026', 'categoria': '0',
+        }, follow=True)
+
+        self.assertContains(response, 'nessuna riga duplicata')
+        self.assertEqual(
+            RigaFattura.objects.filter(
+                fattura=self.fattura_cls,
+                recupero_cls_periodo=datetime(2026, 9, 1).date(),
+            ).count(),
+            1,
+        )
+        recuperata.refresh_from_db()
+        manuale.refresh_from_db()
+        dicitura.refresh_from_db()
+        self.assertEqual(recuperata.prezzo, Decimal('8.000'))
+        self.assertEqual(recuperata.descrizione_snapshot, 'Recuperata poi personalizzata')
+        self.assertEqual(manuale.descrizione_snapshot, 'Manuale personalizzata')
+        self.assertEqual(dicitura.descrizione_snapshot, 'Dicitura manuale')
+
+    def test_recupero_cls_conserva_dicitura_gia_presente(self):
+        bolla = Bolla.objects.create(
+            cliente=self.cliente, tipo_documento=self.tipo_cls,
+            data=timezone.make_aware(datetime(2026, 9, 15, 10)),
+        )
+        RigaBolla.objects.create(bolla=bolla, articolo=self.articolo, quantita=2)
+        dicitura = RigaFattura.objects.create(
+            fattura=self.fattura_cls, articolo=self.dicitura, quantita=1,
+            prezzo=Decimal('0.000'), iva=22, descrizione_snapshot='Dicitura da mantenere',
+        )
+        self.client.force_login(self.user)
+
+        self.client.post(reverse('fattura-update', kwargs={'pk': self.fattura_cls.pk}), {
             'recupera_totali': '1', 'mese': '9', 'anno': '2026', 'categoria': '0',
         })
 
-        self.assertEqual(response.status_code, 302)
-        riga.refresh_from_db()
-        self.assertEqual(riga.descrizione_snapshot, 'Testo già salvato')
+        dicitura.refresh_from_db()
+        self.assertIsNone(dicitura.recupero_cls_periodo)
+        self.assertEqual(dicitura.descrizione_snapshot, 'Dicitura da mantenere')
+        recuperata = RigaFattura.objects.get(
+            fattura=self.fattura_cls,
+            recupero_cls_periodo=datetime(2026, 9, 1).date(),
+        )
+        self.assertEqual(recuperata.articolo, self.articolo)
+        self.assertEqual(recuperata.quantita, 2)
+
+    def test_svuota_righe_elimina_solo_la_fattura_aperta_e_azzera_i_totali(self):
+        self.riga()
+        altra_fattura = Fattura.objects.create(
+            cliente=self.cliente, concessionario=self.conc, tipo_fattura=self.tipo_fattura,
+            data=datetime(2026, 9, 30).date(), condizioni_pagamento='TP02',
+            scadenza_pagamento=datetime(2026, 9, 30).date(), modalita_pagamento='MP01',
+        )
+        RigaFattura.objects.create(
+            fattura=altra_fattura, articolo=self.articolo, quantita=1,
+            prezzo=Decimal('4.500'), iva=22,
+        )
+        self.client.force_login(self.user)
+        url = reverse('fattura-update', kwargs={'pk': self.fattura.pk})
+        pagina = self.client.get(url)
+        self.assertContains(pagina, 'Elimina tutte le righe della fattura')
+
+        response = self.client.post(url, {'svuota_righe': '1', 'categoria': '0'}, follow=True)
+        self.assertContains(response, 'Tutte le righe della fattura sono state eliminate')
+        self.assertFalse(RigaFattura.objects.filter(fattura=self.fattura).exists())
+        self.assertTrue(RigaFattura.objects.filter(fattura=altra_fattura).exists())
+        self.fattura.refresh_from_db()
+        self.assertEqual(self.fattura.totali['tot'], 0.0)
+
+    def test_recupero_cls_storico_non_marcato_blocca_fino_a_svuotamento_esplicito(self):
+        bolla = Bolla.objects.create(
+            cliente=self.cliente, tipo_documento=self.tipo_cls,
+            data=timezone.make_aware(datetime(2026, 9, 15, 10)),
+        )
+        RigaBolla.objects.create(bolla=bolla, articolo=self.articolo, quantita=2)
+        storico = RigaFattura.objects.create(
+            fattura=self.fattura_cls, articolo=self.articolo, quantita=1,
+            prezzo=Decimal('4.500'), iva=22, descrizione_snapshot='Storico non marcato',
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.post(reverse('fattura-update', kwargs={'pk': self.fattura_cls.pk}), {
+            'recupera_totali': '1', 'mese': '9', 'anno': '2026', 'categoria': '0',
+        }, follow=True)
+        self.assertContains(response, 'righe non marcate')
+        storico.refresh_from_db()
+        self.assertIsNone(storico.recupero_cls_periodo)
+        self.assertFalse(RigaFattura.objects.filter(
+            fattura=self.fattura_cls, recupero_cls_periodo=datetime(2026, 9, 1).date(),
+        ).exists())
+
+        storico.delete()
+        self.client.post(reverse('fattura-update', kwargs={'pk': self.fattura_cls.pk}), {
+            'recupera_totali': '1', 'mese': '9', 'anno': '2026', 'categoria': '0',
+        })
+        self.assertTrue(RigaFattura.objects.filter(
+            fattura=self.fattura_cls, recupero_cls_periodo=datetime(2026, 9, 1).date(),
+        ).exists())
+
+    def test_recupero_cls_senza_sorgenti_puo_essere_ripetuto(self):
+        self.client.force_login(self.user)
+        self.client.post(reverse('fattura-update', kwargs={'pk': self.fattura_cls.pk}), {
+            'recupera_totali': '1', 'mese': '9', 'anno': '2026', 'categoria': '0',
+        })
+        self.assertFalse(RigaFattura.objects.filter(fattura=self.fattura_cls).exists())
+
+        bolla = Bolla.objects.create(
+            cliente=self.cliente, tipo_documento=self.tipo_cls,
+            data=timezone.make_aware(datetime(2026, 9, 15, 10)),
+        )
+        RigaBolla.objects.create(bolla=bolla, articolo=self.articolo, quantita=2)
+        self.client.post(reverse('fattura-update', kwargs={'pk': self.fattura_cls.pk}), {
+            'recupera_totali': '1', 'mese': '9', 'anno': '2026', 'categoria': '0',
+        })
+        self.assertEqual(RigaFattura.objects.filter(
+            fattura=self.fattura_cls, recupero_cls_periodo=datetime(2026, 9, 1).date(),
+        ).count(), 1)
+
+    def test_recupero_cls_non_accetta_righe_residue_dopo_cancellazione_marcate(self):
+        bolla = Bolla.objects.create(
+            cliente=self.cliente, tipo_documento=self.tipo_cls,
+            data=timezone.make_aware(datetime(2026, 9, 15, 10)),
+        )
+        RigaBolla.objects.create(bolla=bolla, articolo=self.articolo, quantita=2)
+        self.client.force_login(self.user)
+        url = reverse('fattura-update', kwargs={'pk': self.fattura_cls.pk})
+        self.client.post(url, {'recupera_totali': '1', 'mese': '9', 'anno': '2026', 'categoria': '0'})
+        RigaFattura.objects.filter(
+            fattura=self.fattura_cls, recupero_cls_periodo=datetime(2026, 9, 1).date(),
+        ).delete()
+        manuale = RigaFattura.objects.create(
+            fattura=self.fattura_cls, articolo=self.altro_articolo, quantita=1,
+            prezzo=Decimal('3.000'), iva=10, descrizione_snapshot='Manuale da preservare',
+        )
+        response = self.client.post(url, {
+            'recupera_totali': '1', 'mese': '9', 'anno': '2026', 'categoria': '0',
+        }, follow=True)
+        self.assertContains(response, 'righe non marcate')
+        manuale.refresh_from_db()
+        self.assertEqual(manuale.descrizione_snapshot, 'Manuale da preservare')
+        self.assertFalse(RigaFattura.objects.filter(
+            fattura=self.fattura_cls, recupero_cls_periodo=datetime(2026, 9, 1).date(),
+        ).exists())
+
+    def test_recupero_cls_richiede_id_configurato_esistente(self):
+        self.client.force_login(self.user)
+        url = reverse('fattura-update', kwargs={'pk': self.fattura_cls.pk})
+        with override_settings(CLIENTE_CENTRALE_LATTE_ID=999999):
+            pagina = self.client.get(url)
+            self.assertNotContains(pagina, 'Recupera Totali')
+            response = self.client.post(url, {
+                'recupera_totali': '1', 'mese': '9', 'anno': '2026', 'categoria': '0',
+            }, follow=True)
+        self.assertContains(response, 'non è disponibile per questa fattura')
+
+    def test_vincolo_cls_impedisce_doppia_riga_stesso_articolo_e_periodo(self):
+        periodo = datetime(2026, 9, 1).date()
+        RigaFattura.objects.create(
+            fattura=self.fattura_cls, articolo=self.articolo, quantita=1,
+            prezzo=Decimal('4.500'), iva=22, recupero_cls_periodo=periodo,
+        )
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                RigaFattura.objects.create(
+                    fattura=self.fattura_cls, articolo=self.articolo, quantita=1,
+                    prezzo=Decimal('4.500'), iva=22, recupero_cls_periodo=periodo,
+                )
 
     def test_modifica_riga_personalizza_testo_senza_modificare_anagrafica(self):
         riga = self.riga()

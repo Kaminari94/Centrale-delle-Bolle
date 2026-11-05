@@ -32,7 +32,7 @@ from django.http import FileResponse
 import os
 from django.utils.timezone import make_aware, now, is_aware
 from django.db.models import Case, F, IntegerField, Q, Sum, When
-from django.db import IntegrityError
+from django.db import IntegrityError, OperationalError, transaction
 from django.utils import timezone
 from django.conf import settings
 from .utils import centrale_fattura
@@ -1975,6 +1975,7 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
             str(articolo.pk): descrizione_snapshot_iniziale(articolo.descrizione)
             for articolo in articoli_modificabili
         }
+        context['puo_recuperare_totali_cls'] = is_cliente_centrale_latte(self.object.cliente)
         context['categorie'] = Categoria.objects.prefetch_related(
             Prefetch('articoli', queryset=Articolo.objects.filter(pk__in=articoli_concessi).order_by('nome'))
         ).order_by('ordine')
@@ -1992,6 +1993,18 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
     def post(self, request, *args, **kwargs):
         categoria_selezionata = request.POST.get('categoria') # Per mantenere categoria sel.
         fattura = self.get_object()
+        if 'svuota_righe' in request.POST:
+            # Il bottone usa la stessa view (e quindi gli stessi permessi) di
+            # modifica della fattura. Non coinvolge righe di altre fatture.
+            with transaction.atomic():
+                RigaFattura.objects.filter(fattura=fattura).delete()
+                # I segnali delle singole righe aggiornano gia' i totali; il
+                # ricalcolo finale rende esplicito lo stato della fattura vuota.
+                fattura.aggiorna_totali()
+            messages.success(request, "Tutte le righe della fattura sono state eliminate.")
+            return redirect(
+                f"{reverse('fattura-update', kwargs={'pk': fattura.pk})}?categoria={categoria_selezionata}"
+            )
         if 'add_riga' in request.POST:
             #aggiungi riga alla bolla
             articolo_id = request.POST.get('articolo')
@@ -2112,10 +2125,21 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
                 f"{reverse('fattura-update', kwargs={'pk': fattura.pk})}?categoria={categoria_selezionata}"
             )
         elif 'recupera_totali' in request.POST:
-            # Recupera i totali per il mese selezionato
-            user = self.request.user
-            mese = int(request.POST.get('mese'))
-            anno = int(request.POST.get('anno'))
+            if not is_cliente_centrale_latte(fattura.cliente):
+                messages.error(request, "Il recupero totali non è disponibile per questa fattura.")
+                return redirect(
+                    f"{reverse('fattura-update', kwargs={'pk': fattura.pk})}?categoria={categoria_selezionata}"
+                )
+            # Il periodo scelto nel form identifica esclusivamente le bolle
+            # CLS da recuperare, non la data della fattura.
+            try:
+                mese = int(request.POST.get('mese'))
+                anno = int(request.POST.get('anno'))
+                if not 1 <= mese <= 12:
+                    raise ValueError
+            except (TypeError, ValueError):
+                messages.error(request, "Selezionare un mese e un anno validi.")
+                return redirect('fattura-update', pk=fattura.pk)
             if not anno:
                 anno = datetime.now().year
             cliente = fattura.cliente
@@ -2127,35 +2151,20 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
             data_fine = (data_inizio + relativedelta(months=1)) - timedelta(days=1)
             data_fine = datetime.combine(data_fine, datetime.max.time())
             data_fine = timezone.make_aware(data_fine, timezone.get_current_timezone())
-            if hasattr(user, 'zona'):
-                zona = user.zona
-                concessionario = zona.concessionario
-            else:
-                concessionario = user.concessionario
-            tipo_rf = TipoDocumento.objects.filter(nome="RF", concessionario = concessionario).first()
-            tipo_cls = TipoDocumento.objects.filter(nome="CLS", concessionario = concessionario).first()
-            tipo_ntv = TipoDocumento.objects.filter(nome="NTV", concessionario=concessionario).first()
-            if cliente.tipo_documento_predefinito == tipo_rf:
-                # DEBUG print("hello")
-                # Recupera le bolle dei clienti CLS
-                bolle_cliente = Bolla.objects.filter(
-                    tipo_documento = tipo_cls,
-                    data__range=(data_inizio, data_fine)
-                )
-            elif cliente.tipo_documento_predefinito == tipo_ntv:
-                bolle_cliente = SchedaTV.objects.filter(
-                    cliente = cliente,
-                    data__range = (data_inizio, data_fine)
-                )
-            else:
-                # Recupera le bolle del cliente per il mese selezionato
-                bolle_cliente = Bolla.objects.filter(
-                    cliente=cliente,
-                    data__range=(data_inizio, data_fine)
-                )
-           # if cliente.tipo_documento_predefinito == tipo_ntv:
-           # DEBUG     print(bolle_cliente.first().righe.all())
-           #     return redirect('fattura-update', pk=self.get_object().pk)
+            periodo_recupero = data_inizio.date()
+            # CLS qui e' il tipo documento delle bolle sorgenti, non il cliente
+            # destinatario della fattura, identificato sopra dall'ID configurato.
+            tipo_cls = TipoDocumento.objects.filter(
+                nome="CLS",
+                concessionario=fattura.concessionario,
+            ).first()
+            if not tipo_cls:
+                messages.error(request, "Tipo documento CLS sorgente non configurato.")
+                return redirect('fattura-update', pk=fattura.pk)
+            bolle_cliente = Bolla.objects.filter(
+                tipo_documento=tipo_cls,
+                data__range=(data_inizio, data_fine),
+            )
             # Calcola i totali per ogni articolo
             riepilogo = defaultdict(lambda: {"quantita": 0, "articolo": None})
             for bolla in bolle_cliente:
@@ -2164,31 +2173,63 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
                     riepilogo[articolo.pk]["articolo"] = articolo
                     riepilogo[articolo.pk]["quantita"] += riga.quantita
 
-            # Aggiungi i totali come righe alla fattura
-            articoli = 0
+            # SQLite non offre un row-lock equivalente a select_for_update.
+            # Il blocco atomico, insieme al vincolo unico della migrazione,
+            # impedisce che due POST concorrenti creino righe duplicate.
+            try:
+                with transaction.atomic():
+                    righe_fattura = RigaFattura.objects.filter(fattura=fattura)
+                    if righe_fattura.filter(
+                        recupero_cls_periodo=periodo_recupero,
+                    ).exists():
+                        messages.success(request, "Recupero CLS già eseguito per il periodo selezionato: nessuna riga duplicata.")
+                        return redirect('fattura-update', pk=fattura.pk)
 
-            for riga in riepilogo.values():
-                articolo = riga["articolo"]
-                iva = articolo.iva
-                prezzo_pers = PrezziPersonalizzati.objects.filter(articolo=articolo, cliente=cliente).first()
-                if prezzo_pers:
-                    prezzo = float(prezzo_pers.prezzo)
-                elif cliente.tipo_documento_predefinito == tipo_rf:
-                    prezzo = articolo.prezzo_tr
-                    iva = 22
-                else:
-                    prezzo = articolo.prezzo
-                if type(prezzo) != Decimal:
-                    prezzo = Decimal(prezzo)
-                RigaFattura.objects.create(
-                    fattura=fattura,
-                    articolo=riga["articolo"],
-                    descrizione_snapshot=descrizione_snapshot_iniziale(articolo.descrizione),
-                    quantita=riga["quantita"],
-                    prezzo=prezzo,
-                    iva= iva,
+                    # Le Diciture sono righe testuali, senza contributo
+                    # economico, e possono convivere con il recupero. Per le
+                    # altre righe non marcate non è possibile stabilire se
+                    # siano manuali oppure un recupero storico: non inferire
+                    # mai l'origine dal solo articolo.
+                    righe_non_distinguibili = righe_fattura.filter(
+                        recupero_cls_periodo__isnull=True,
+                    ).exclude(articolo__categoria__nome="Diciture")
+                    if righe_non_distinguibili.exists():
+                        messages.error(
+                            request,
+                            "Recupero CLS bloccato: la fattura contiene righe non marcate, "
+                            "di cui non è possibile stabilire l'origine. Svuotare esplicitamente "
+                            "la fattura prima di recuperare il periodo.",
+                        )
+                        return redirect('fattura-update', pk=fattura.pk)
+
+                    articoli = 0
+                    for riga in riepilogo.values():
+                        articolo = riga["articolo"]
+                        # La fattura della Centrale applica sempre l'aliquota
+                        # IVA del 22% alle righe economiche recuperate.
+                        iva = 22
+                        # La fattura della Centrale usa sempre il listino
+                        # transfert dell'articolo: non il prezzo ordinario e
+                        # non eventuali prezzi personalizzati.
+                        prezzo = articolo.prezzo_tr
+                        if type(prezzo) != Decimal:
+                            prezzo = Decimal(prezzo)
+                        RigaFattura.objects.create(
+                            fattura=fattura,
+                            articolo=articolo,
+                            descrizione_snapshot=descrizione_snapshot_iniziale(articolo.descrizione),
+                            recupero_cls_periodo=periodo_recupero,
+                            quantita=riga["quantita"],
+                            prezzo=prezzo,
+                            iva=iva,
+                        )
+                        articoli += 1
+            except (IntegrityError, OperationalError):
+                messages.error(
+                    request,
+                    "Recupero CLS non completato: un'altra richiesta sta aggiornando questa fattura. Riprovare.",
                 )
-                articoli += 1
+                return redirect('fattura-update', pk=fattura.pk)
             mesetto = _date(data_inizio, "F")
             messages.success(request, f"Totali recuperati per il mese di {mesetto} {anno}. {articoli} articoli aggiunti.")
             return redirect('fattura-update', pk=self.get_object().pk)
