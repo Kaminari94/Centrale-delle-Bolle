@@ -310,6 +310,39 @@ class TipoFattura(models.Model):
     def __str__(self):
         return self.descrizione
 
+
+def descrizione_snapshot_iniziale(descrizione):
+    """Converte la descrizione dell'articolo nello snapshot di una riga nuova.
+
+    Lo snapshot non resta mai NULL per le nuove righe: una descrizione articolo
+    NULL diventa una stringa vuota, che significa testo volutamente assente.
+    NULL rimane riservato alle righe storiche, il cui testo non e' disponibile.
+    """
+    return "" if descrizione is None else descrizione
+
+
+class RigaFatturaQuerySet(models.QuerySet):
+    def bulk_create(self, objs, *args, **kwargs):
+        """Completa gli snapshot anche nei percorsi che non chiamano save()."""
+        da_completare = [
+            riga for riga in objs
+            if riga.descrizione_snapshot is None and riga.articolo_id
+        ]
+        descrizioni = dict(
+            Articolo.objects.filter(
+                pk__in={riga.articolo_id for riga in da_completare}
+            ).values_list('pk', 'descrizione')
+        )
+        for riga in da_completare:
+            riga.descrizione_snapshot = descrizione_snapshot_iniziale(
+                descrizioni.get(riga.articolo_id)
+            )
+        return super().bulk_create(objs, *args, **kwargs)
+
+
+class RigaFatturaManager(models.Manager.from_queryset(RigaFatturaQuerySet)):
+    pass
+
 class Fattura(models.Model):
     CONDIZIONI = [
         ("TP01", 'Pagamento a rate'),
@@ -412,15 +445,37 @@ class RigaFattura(models.Model):
     numero_linea = models.CharField(max_length=4, null=True, blank=True)
     fattura = models.ForeignKey('Fattura', on_delete=models.CASCADE, related_name="righe")
     articolo = models.ForeignKey('Articolo', on_delete=models.CASCADE)
+    # NULL identifica esclusivamente una riga storica senza testo documentale noto.
+    # La stringa vuota e' invece uno snapshot intenzionalmente vuoto.
+    descrizione_snapshot = models.TextField(null=True, blank=True)
     prezzo = models.DecimalField(max_digits=10, decimal_places=3, default=0.0)
     quantita = models.PositiveIntegerField()
     imp = models.DecimalField(max_digits=20, decimal_places=3, default=0.0)
     iva = models.PositiveSmallIntegerField(choices=IVA_SCELTE, default=4)
     tot_iva = models.DecimalField(max_digits=20, decimal_places=3, default=0.0)
 
+    objects = RigaFatturaManager()
+
+    @property
+    def descrizione_documento(self):
+        """Testo da mostrare nel documento, con fallback solo per righe storiche."""
+        if self.descrizione_snapshot is None:
+            return descrizione_snapshot_iniziale(self.articolo.descrizione)
+        return self.descrizione_snapshot
+
+    @property
+    def descrizione_da_fallback(self):
+        return self.descrizione_snapshot is None
+
     def save(self, *args, **kwargs):
         with (transaction.atomic()):
-            if not self.prezzo:
+            if self._state.adding and self.descrizione_snapshot is None:
+                self.descrizione_snapshot = descrizione_snapshot_iniziale(
+                    self.articolo.descrizione
+                )
+            # Per una riga esistente lo 0 e' un prezzo esplicito valido e non
+            # deve essere sostituito dal prezzo corrente dell'anagrafica.
+            if self._state.adding and not self.prezzo:
                 self.prezzo = self.articolo.prezzo
             bias_imp = self.prezzo * Decimal(self.quantita)
             self.imp = bias_imp

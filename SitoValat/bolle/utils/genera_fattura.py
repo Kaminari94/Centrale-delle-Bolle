@@ -108,7 +108,7 @@ def genera_fattura_xml(fattura):
         xml.addQuickElement("CodiceTipo", "AswArtFor")
         xml.addQuickElement("CodiceValore", riga.articolo.nome)
         xml.endElement("CodiceArticolo")
-        xml.addQuickElement("Descrizione", riga.articolo.descrizione)
+        xml.addQuickElement("Descrizione", riga.descrizione_documento)
         xml.addQuickElement("Quantita", str(format(riga.quantita, ".2f"))) # Quantità totale articolo
         xml.addQuickElement("PrezzoUnitario", str(format(riga.prezzo, ".3f"))) # Col punto
         xml.addQuickElement("PrezzoTotale", str(format(riga.imp, ".2f"))) # Prezzo non ivato

@@ -35,7 +35,7 @@
                 <tr>
                     <td>{{ forloop.counter }}</td>
                     <td>{{ riga.articolo.nome }}</td>
-                    <td>{{ riga.articolo.descrizione }}</td>
+                    <td>{{ riga.descrizione_documento|linebreaksbr }}</td>
                     <td>{{ riga.prezzo }} €</td>
                     <td>{{ riga.quantita }}</td>
                     <td>{{ riga.get_iva_display }}</td>

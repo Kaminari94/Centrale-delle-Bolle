@@ -31,9 +31,11 @@ from .models import (
     Fornitore,
     TipoFattura,
     Fattura,
+    RigaFattura,
     current_year,
 )
 from .utils.riepilogo import calcola_riep_giornaliero
+from .utils.genera_fattura import genera_fattura_xml
 
 class ArticoloListViewTests(TestCase):
     def setUp(self):
@@ -765,4 +767,263 @@ class FattureCumulativePdfOrderingTests(TestCase):
                 f'fattura:{nota_credito_ntv.pk}:pagina:1',
             ],
         )
+
+
+class RigaFatturaDescrizioneSnapshotTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username='descrizioni-fatture', password='test-password')
+        self.conc = Concessionario.objects.create(
+            nome='Concessionario descrizioni', indirizzo='Via Roma', via='Via Roma', cap='84025',
+            citta='Eboli', provincia='SA', partita_iva='IT00000000004',
+        )
+        self.zona = Zona.objects.create(nome='Zona descrizioni', concessionario=self.conc, user=self.user)
+        self.categoria = Categoria.objects.create(nome='Prodotti descrizioni')
+        self.diciture = Categoria.objects.create(nome='Diciture')
+        self.articolo = Articolo.objects.create(
+            nome='ART-DESC', descrizione='Testo & <originale>\nseconda riga',
+            categoria=self.categoria, iva=22, prezzo=Decimal('4.500'), costo=Decimal('1.000'),
+        )
+        self.altro_articolo = Articolo.objects.create(
+            nome='ART-ALTRO', descrizione='Descrizione proposta nuova',
+            categoria=self.categoria, iva=10, prezzo=Decimal('3.000'), costo=Decimal('1.000'),
+        )
+        self.dicitura = Articolo.objects.create(
+            nome='DICITURA', descrizione='Testo dicitura', categoria=self.diciture,
+            iva=22, prezzo=Decimal('0.000'), costo=Decimal('0.000'),
+        )
+        self.tipo_documento = TipoDocumento.objects.create(nome='NT', concessionario=self.conc)
+        self.cliente = Cliente.objects.create(
+            nome='Cliente descrizioni', concessionario=self.conc, via='Via Test', cap='84025',
+            citta='Eboli', provincia='SA', piva='IT00000000004', pec='test@example.com',
+            zona=self.zona, tipo_documento_predefinito=self.tipo_documento,
+        )
+        self.tipo_fattura = TipoFattura.objects.create(
+            tipo='TD01', descrizione='Fattura', anno=2026, concessionario=self.conc,
+        )
+        self.fattura = Fattura.objects.create(
+            cliente=self.cliente, concessionario=self.conc, tipo_fattura=self.tipo_fattura,
+            data=datetime(2026, 9, 30).date(), condizioni_pagamento='TP02',
+            scadenza_pagamento=datetime(2026, 9, 30).date(), modalita_pagamento='MP01',
+        )
+
+    def riga(self, articolo=None, **kwargs):
+        return RigaFattura.objects.create(
+            fattura=self.fattura, articolo=articolo or self.articolo,
+            quantita=kwargs.pop('quantita', 2), prezzo=kwargs.pop('prezzo', Decimal('4.500')),
+            iva=kwargs.pop('iva', 22), **kwargs,
+        )
+
+    def test_snapshot_nuovo_resta_immutabile_e_xml_usa_il_testo_salvato(self):
+        riga = self.riga()
+        testo_originale = self.articolo.descrizione
+        self.assertEqual(riga.descrizione_snapshot, testo_originale)
+
+        self.articolo.descrizione = 'Descrizione anagrafica modificata'
+        self.articolo.save()
+        riga.quantita = 7
+        riga.prezzo = Decimal('8.000')
+        riga.iva = 10
+        riga.save()
+        riga.refresh_from_db()
+
+        self.assertEqual(riga.descrizione_documento, testo_originale)
+        self.assertEqual(riga.descrizione_snapshot, testo_originale)
+        with patch('bolle.utils.genera_fattura.genera_pdf_base64', return_value='pdf-base64'):
+            xml = genera_fattura_xml(self.fattura)
+        self.assertIn('Testo &amp; &lt;originale&gt;', xml)
+        self.assertIn('seconda riga', xml)
+        self.assertNotIn('Descrizione anagrafica modificata', xml)
+
+    def test_stringa_vuota_e_bulk_create_non_usano_il_fallback(self):
+        vuota = self.riga(descrizione_snapshot='')
+        RigaFattura.objects.bulk_create([
+            RigaFattura(
+                fattura=self.fattura, articolo=self.altro_articolo,
+                quantita=1, prezzo=Decimal('3.000'), iva=10,
+            )
+        ])
+        da_bulk = RigaFattura.objects.exclude(pk=vuota.pk).latest('pk')
+        self.articolo.descrizione = 'Non deve apparire'
+        self.articolo.save()
+
+        self.assertEqual(vuota.descrizione_documento, '')
+        self.assertEqual(da_bulk.descrizione_snapshot, 'Descrizione proposta nuova')
+
+    def test_riga_storica_fallback_solo_finche_non_viene_acquisita_esplicitamente(self):
+        riga = self.riga()
+        RigaFattura.objects.filter(pk=riga.pk).update(descrizione_snapshot=None)
+        riga.refresh_from_db()
+        self.articolo.descrizione = 'Fallback corrente'
+        self.articolo.save()
+
+        riga.quantita = 5
+        riga.save()
+        riga.refresh_from_db()
+        self.assertTrue(riga.descrizione_da_fallback)
+        self.assertEqual(riga.descrizione_documento, 'Fallback corrente')
+        self.assertIsNone(riga.descrizione_snapshot)
+
+        self.client.force_login(self.user)
+        pagina = self.client.get(reverse('fattura-update', kwargs={'pk': self.fattura.pk}))
+        self.assertContains(pagina, 'lo storico originale non è disponibile')
+        self.assertContains(pagina, 'Fallback corrente')
+        response = self.client.post(reverse('fattura-update', kwargs={'pk': self.fattura.pk}), {
+            'aggiorna_riga': '1', 'riga_id': riga.pk, 'articolo': self.articolo.pk,
+            'descrizione': 'Fallback corrente', 'categoria': '0',
+        })
+        self.assertEqual(response.status_code, 302)
+        riga.refresh_from_db()
+        self.assertFalse(riga.descrizione_da_fallback)
+        self.assertEqual(riga.descrizione_snapshot, 'Fallback corrente')
+
+    def test_recupero_totali_non_modifica_snapshot_gia_salvati(self):
+        riga = self.riga(descrizione_snapshot='Testo già salvato')
+        self.client.force_login(self.user)
+
+        response = self.client.post(reverse('fattura-update', kwargs={'pk': self.fattura.pk}), {
+            'recupera_totali': '1', 'mese': '9', 'anno': '2026', 'categoria': '0',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        riga.refresh_from_db()
+        self.assertEqual(riga.descrizione_snapshot, 'Testo già salvato')
+
+    def test_modifica_riga_personalizza_testo_senza_modificare_anagrafica(self):
+        riga = self.riga()
+        self.client.force_login(self.user)
+        response = self.client.post(reverse('fattura-update', kwargs={'pk': self.fattura.pk}), {
+            'aggiorna_riga': '1', 'riga_id': riga.pk, 'articolo': self.altro_articolo.pk,
+            'descrizione': 'Testo personalizzato\ncon seconda riga', 'categoria': '0',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        riga.refresh_from_db()
+        self.altro_articolo.refresh_from_db()
+        self.assertEqual(riga.articolo, self.altro_articolo)
+        self.assertEqual(riga.descrizione_documento, 'Testo personalizzato\ncon seconda riga')
+        self.assertEqual(self.altro_articolo.descrizione, 'Descrizione proposta nuova')
+        self.assertEqual(riga.prezzo, Decimal('3.000'))
+        self.assertEqual(riga.iva, 10)
+
+    def test_modifica_quantita_prezzo_ricalcola_totali_e_preserva_snapshot(self):
+        riga = self.riga(descrizione_snapshot='Descrizione personalizzata')
+        self.client.force_login(self.user)
+        response = self.client.post(reverse('fattura-update', kwargs={'pk': self.fattura.pk}), {
+            'aggiorna_importi': '1', 'riga_id': riga.pk, 'quantita': '3',
+            'prezzo': '1.234', 'categoria': '0',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        riga.refresh_from_db()
+        self.fattura.refresh_from_db()
+        self.assertEqual(riga.quantita, 3)
+        self.assertEqual(riga.prezzo, Decimal('1.234'))
+        self.assertEqual(riga.imp, Decimal('3.702'))
+        self.assertEqual(riga.descrizione_snapshot, 'Descrizione personalizzata')
+        self.assertAlmostEqual(self.fattura.totali['22']['imp'], 3.702)
+
+        with patch('bolle.utils.genera_fattura.genera_pdf_base64', return_value='pdf-base64'):
+            xml = genera_fattura_xml(self.fattura)
+        self.assertIn('<Quantita>3.00</Quantita>', xml)
+        self.assertIn('<PrezzoUnitario>1.234</PrezzoUnitario>', xml)
+
+    def test_modifica_importi_non_acquisisce_fallback_e_rifiuta_valori_non_validi(self):
+        riga = self.riga()
+        RigaFattura.objects.filter(pk=riga.pk).update(descrizione_snapshot=None)
+        self.client.force_login(self.user)
+
+        response = self.client.post(reverse('fattura-update', kwargs={'pk': self.fattura.pk}), {
+            'aggiorna_importi': '1', 'riga_id': riga.pk, 'quantita': '4',
+            'prezzo': '0.000', 'categoria': '0',
+        })
+        self.assertEqual(response.status_code, 302)
+        riga.refresh_from_db()
+        self.assertEqual(riga.prezzo, Decimal('0.000'))
+        self.assertIsNone(riga.descrizione_snapshot)
+
+        response = self.client.post(reverse('fattura-update', kwargs={'pk': self.fattura.pk}), {
+            'aggiorna_importi': '1', 'riga_id': riga.pk, 'quantita': '0',
+            'prezzo': '1.2345', 'categoria': '0',
+        }, follow=True)
+        self.assertContains(response, 'quantità intera valida')
+        riga.refresh_from_db()
+        self.assertEqual(riga.quantita, 4)
+        self.assertEqual(riga.prezzo, Decimal('0.000'))
+        self.assertIsNone(riga.descrizione_snapshot)
+
+    def test_importi_dicitura_non_sono_modificabili(self):
+        riga = self.riga(articolo=self.dicitura, quantita=1, prezzo=Decimal('0.000'))
+        self.client.force_login(self.user)
+        response = self.client.post(reverse('fattura-update', kwargs={'pk': self.fattura.pk}), {
+            'aggiorna_importi': '1', 'riga_id': riga.pk, 'quantita': '9',
+            'prezzo': '99.000', 'categoria': '0',
+        }, follow=True)
+
+        self.assertContains(response, 'Diciture non hanno valori economici modificabili')
+        riga.refresh_from_db()
+        self.assertEqual(riga.quantita, 1)
+        self.assertEqual(riga.prezzo, Decimal('0.000'))
+
+    def test_cambio_articolo_in_dicitura_azzera_importi_e_totali(self):
+        riga = self.riga(articolo=self.dicitura, quantita=3, prezzo=Decimal('0.000'))
+        self.client.force_login(self.user)
+
+        self.client.post(reverse('fattura-update', kwargs={'pk': self.fattura.pk}), {
+            'aggiorna_riga': '1', 'riga_id': riga.pk, 'articolo': self.articolo.pk,
+            'descrizione': 'Articolo economico', 'categoria': '0',
+        })
+        self.client.post(reverse('fattura-update', kwargs={'pk': self.fattura.pk}), {
+            'aggiorna_importi': '1', 'riga_id': riga.pk, 'quantita': '3',
+            'prezzo': '4.500', 'categoria': '0',
+        })
+        response = self.client.post(reverse('fattura-update', kwargs={'pk': self.fattura.pk}), {
+            'aggiorna_riga': '1', 'riga_id': riga.pk, 'articolo': self.dicitura.pk,
+            'descrizione': 'Testo dicitura personalizzato', 'categoria': '0',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        riga.refresh_from_db()
+        self.fattura.refresh_from_db()
+        self.assertEqual(riga.articolo, self.dicitura)
+        self.assertEqual(riga.prezzo, Decimal('0.000'))
+        self.assertEqual(riga.imp, Decimal('0.000'))
+        self.assertEqual(riga.tot_iva, Decimal('0.000'))
+        self.assertEqual(self.fattura.totali['tot'], 0.0)
+
+    def test_dicitura_multilinea_nel_pdf_cumulativo_non_mostra_quantita_o_importi(self):
+        from .views import disegna_fattura
+
+        class CanvasRegistrante:
+            def __init__(self):
+                self.stringhe = []
+                self.stringhe_destra = []
+
+            def setTitle(self, *args): pass
+            def drawImage(self, *args, **kwargs): pass
+            def setFont(self, *args): pass
+            def setLineWidth(self, *args): pass
+            def line(self, *args): pass
+            def showPage(self): pass
+
+            def drawString(self, *args):
+                self.stringhe.append(args[-1])
+
+            def drawRightString(self, *args):
+                self.stringhe_destra.append(args[-1])
+
+        riga = self.riga(
+            articolo=self.dicitura,
+            quantita=2,
+            prezzo=Decimal('0.000'),
+            descrizione_snapshot='Prima riga\nSeconda riga',
+        )
+        self.fattura.concessionario.logo = 'logo-di-prova.png'
+        canvas = CanvasRegistrante()
+
+        disegna_fattura(canvas, self.fattura)
+
+        self.assertIn('Prima riga', canvas.stringhe)
+        self.assertIn('Seconda riga', canvas.stringhe)
+        self.assertNotIn(str(riga.quantita), canvas.stringhe_destra)
 

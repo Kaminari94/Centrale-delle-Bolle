@@ -6,7 +6,7 @@ from django.views.generic import DeleteView, UpdateView, CreateView
 from django.contrib.auth.views import LoginView
 from django.contrib.auth import user_logged_in
 from django.contrib.auth.decorators import login_required
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from .models import *
 import fitz
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -17,6 +17,7 @@ from datetime import timedelta, datetime, date
 from django.db.models import Prefetch
 from django.forms import ModelForm
 from django.forms.models import inlineformset_factory
+from django.core.exceptions import ValidationError
 from django.views.generic.edit import FormView
 from django.urls import reverse
 from django.shortcuts import render, redirect, get_object_or_404
@@ -1852,31 +1853,31 @@ def disegna_fattura(c, fattura):
     riga_counter = 0
 
     for riga in fattura.righe.all():
-        if riga_counter >= max_righe_per_pagina:
-            disegna_footer(y_footer)
-            c.showPage()
-            disegna_intestazione()
-            y = altezza-250
-            disegna_tabella_articoli(y)
-            y -= 20
-            riga_counter = 0 #reset contatore righe
-        #Disegna dati della tabella, i vari prodotti
-        c.setFont("Helvetica", 10)
-        c.setLineWidth(1)  # Imposta spessore linea cliente
-        c.drawString(50, y, riga.articolo.nome)
-        c.drawString(110, y, riga.articolo.descrizione)
-        if riga.articolo.categoria.nome == "Diciture":
-            c.line(50, y - 2, 550, y - 2)  # Linea per cliente
+        descrizione = riga.descrizione_documento.splitlines() or [""]
+        e_dicitura = riga.articolo.categoria.nome == "Diciture"
+        for indice, testo in enumerate(descrizione):
+            if riga_counter >= max_righe_per_pagina:
+                disegna_footer(y_footer)
+                c.showPage()
+                disegna_intestazione()
+                y = altezza-250
+                disegna_tabella_articoli(y)
+                y -= 20
+                riga_counter = 0
+            c.setFont("Helvetica", 10)
+            c.setLineWidth(1)
+            if indice == 0:
+                c.drawString(50, y, riga.articolo.nome)
+                if not e_dicitura:
+                    c.drawString(260, y, str(riga.iva)+"%")
+                    c.drawRightString(350, y, str(riga.quantita))
+                    c.drawRightString(440, y, "€ {:.3f}".format(riga.prezzo))
+                    c.drawRightString(550, y, "€ {:.3f}".format(riga.imp))
+            c.drawString(110, y, testo)
+            if indice == len(descrizione) - 1:
+                c.line(50, y-2, 550, y-2)
             y -= 11
             riga_counter += 1
-            continue
-        c.drawString(260, y, str(riga.iva)+"%")
-        c.drawRightString(350, y, str(riga.quantita))
-        c.drawRightString(440, y, "€ {:.3f}".format(riga.prezzo))
-        c.drawRightString(550, y, "€ {:.3f}".format(riga.imp))
-        c.line(50, y-2, 550, y-2)  # Linea per cliente
-        y -= 11
-        riga_counter += 1
 
     disegna_footer(y_footer)
 
@@ -1928,6 +1929,21 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
     template_name = 'fatture/fattura_form.html'
     success_url = reverse_lazy('fatture-list')  # Dopo la modifica, torna alla lista
 
+    @staticmethod
+    def _valida_importi_riga(quantita_raw, prezzo_raw):
+        if not quantita_raw or not quantita_raw.isdigit() or int(quantita_raw) <= 0:
+            raise ValidationError("Inserisci una quantità intera valida maggiore di 0.")
+        quantita = int(quantita_raw)
+        RigaFattura._meta.get_field('quantita').run_validators(quantita)
+
+        try:
+            prezzo = RigaFattura._meta.get_field('prezzo').clean(prezzo_raw, None)
+        except (InvalidOperation, TypeError, ValidationError) as errore:
+            raise ValidationError("Inserisci un prezzo unitario valido con al massimo 3 decimali.") from errore
+        if prezzo < 0:
+            raise ValidationError("Il prezzo unitario non può essere negativo.")
+        return quantita, prezzo
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         cliente = self.object.cliente
@@ -1946,7 +1962,19 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
             articoli_concessi = Articolo.objects.filter(categoria_id = categoria_selezionata)
             # Ottieni gli articoli concessi al proprietario del cliente
 
-        context['righe'] = self.object.righe.all()
+        righe = self.object.righe.select_related('articolo__categoria').all()
+        # Una riga gia' presente resta modificabile anche se la categoria aperta
+        # nel selettore non la include.
+        articoli_modificabili = Articolo.objects.filter(
+            Q(pk__in=articoli_concessi) |
+            Q(pk__in=[riga.articolo_id for riga in righe])
+        ).order_by('nome', 'pk')
+        context['righe'] = righe
+        context['articoli_modificabili'] = articoli_modificabili
+        context['articoli_descrizioni'] = {
+            str(articolo.pk): descrizione_snapshot_iniziale(articolo.descrizione)
+            for articolo in articoli_modificabili
+        }
         context['categorie'] = Categoria.objects.prefetch_related(
             Prefetch('articoli', queryset=Articolo.objects.filter(pk__in=articoli_concessi).order_by('nome'))
         ).order_by('ordine')
@@ -1963,12 +1991,13 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
 
     def post(self, request, *args, **kwargs):
         categoria_selezionata = request.POST.get('categoria') # Per mantenere categoria sel.
+        fattura = self.get_object()
         if 'add_riga' in request.POST:
             #aggiungi riga alla bolla
             articolo_id = request.POST.get('articolo')
             quantita = request.POST.get('quantita')
             prezzo = request.POST.get('prezzo')
-            cliente = self.get_object().cliente
+            cliente = fattura.cliente
             user = self.request.user
             # Verifica se la quantità è valida
             if hasattr(user, 'zona'):
@@ -2001,13 +2030,87 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
             #print(type(prezzo))
             #print(prezzo)
             RigaFattura.objects.create(
-                fattura = self.get_object(),
+                fattura = fattura,
                 articolo_id = articolo_id,
+                descrizione_snapshot=(
+                    request.POST['descrizione']
+                    if 'descrizione' in request.POST
+                    else descrizione_snapshot_iniziale(articolo.descrizione)
+                ),
                 prezzo = Decimal(prezzo),
                 quantita = quantita,
                 iva = iva,
             )
-            return redirect(f"{reverse('fattura-update', kwargs={'pk': self.get_object().pk})}?categoria={categoria_selezionata}")
+            return redirect(f"{reverse('fattura-update', kwargs={'pk': fattura.pk})}?categoria={categoria_selezionata}")
+        elif 'aggiorna_riga' in request.POST:
+            riga = get_object_or_404(
+                RigaFattura,
+                pk=request.POST.get('riga_id'),
+                fattura=fattura,
+            )
+            articolo_id = request.POST.get('articolo')
+            if not articolo_id:
+                messages.error(request, "Inserire un articolo.")
+                return redirect(
+                    f"{reverse('fattura-update', kwargs={'pk': fattura.pk})}?categoria={categoria_selezionata}"
+                )
+            articolo = get_object_or_404(Articolo, pk=articolo_id)
+            riga.articolo = articolo
+            cliente = fattura.cliente
+            tipo_rf = TipoDocumento.objects.filter(
+                nome="RF",
+                concessionario=fattura.concessionario,
+            ).first()
+            prezzo_personalizzato = PrezziPersonalizzati.objects.filter(
+                articolo=articolo,
+                cliente=cliente,
+            ).first()
+            riga.prezzo = prezzo_personalizzato.prezzo if prezzo_personalizzato else articolo.prezzo
+            riga.iva = articolo.iva
+            if cliente.tipo_documento_predefinito == tipo_rf:
+                riga.prezzo = articolo.prezzo_tr
+                riga.iva = 22
+            # Una Diciture non deve mai mantenere importi ereditati da un
+            # articolo economico selezionato in precedenza.
+            if articolo.categoria.nome == "Diciture":
+                riga.prezzo = Decimal('0')
+            # Questo e' un salvataggio esplicito: acquisisce anche il fallback
+            # di una riga storica senza alterare l'anagrafica articolo.
+            riga.descrizione_snapshot = request.POST.get('descrizione', '')
+            riga.save()
+            return redirect(
+                f"{reverse('fattura-update', kwargs={'pk': fattura.pk})}?categoria={categoria_selezionata}"
+            )
+        elif 'aggiorna_importi' in request.POST:
+            riga = get_object_or_404(
+                RigaFattura,
+                pk=request.POST.get('riga_id'),
+                fattura=fattura,
+            )
+            if riga.articolo.categoria.nome == "Diciture":
+                messages.error(request, "Le Diciture non hanno valori economici modificabili.")
+                return redirect(
+                    f"{reverse('fattura-update', kwargs={'pk': fattura.pk})}?categoria={categoria_selezionata}"
+                )
+            try:
+                quantita, prezzo = self._valida_importi_riga(
+                    request.POST.get('quantita'),
+                    request.POST.get('prezzo'),
+                )
+            except ValidationError as errore:
+                messages.error(request, errore.messages[0])
+                return redirect(
+                    f"{reverse('fattura-update', kwargs={'pk': fattura.pk})}?categoria={categoria_selezionata}"
+                )
+            # RigaFattura.save ricalcola imposta, imponibile e, tramite il
+            # segnale esistente, i totali della fattura. Non toccare articolo
+            # o descrizione_snapshot: una riga storica resta tale.
+            riga.quantita = quantita
+            riga.prezzo = prezzo
+            riga.save()
+            return redirect(
+                f"{reverse('fattura-update', kwargs={'pk': fattura.pk})}?categoria={categoria_selezionata}"
+            )
         elif 'recupera_totali' in request.POST:
             # Recupera i totali per il mese selezionato
             user = self.request.user
@@ -2015,7 +2118,7 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
             anno = int(request.POST.get('anno'))
             if not anno:
                 anno = datetime.now().year
-            cliente = self.get_object().cliente
+            cliente = fattura.cliente
 
             # Calcola il range di date per il mese
             data_inizio = datetime(anno, mese, 1)
@@ -2078,8 +2181,9 @@ class FatturaUpdateView(LoginRequiredMixin, UpdateView):
                 if type(prezzo) != Decimal:
                     prezzo = Decimal(prezzo)
                 RigaFattura.objects.create(
-                    fattura=self.get_object(),
+                    fattura=fattura,
                     articolo=riga["articolo"],
+                    descrizione_snapshot=descrizione_snapshot_iniziale(articolo.descrizione),
                     quantita=riga["quantita"],
                     prezzo=prezzo,
                     iva= iva,
@@ -2747,6 +2851,7 @@ class ConfermaFattureView(View):
                     RigaFattura.objects.create(
                         fattura=fattura,
                         articolo_id=articolo.pk,
+                        descrizione_snapshot=descrizione_snapshot_iniziale(articolo.descrizione),
                         quantita=riga_data['quantita'],
                         prezzo=Decimal(riga_data['prezzo']),
                         iva = articolo.iva,

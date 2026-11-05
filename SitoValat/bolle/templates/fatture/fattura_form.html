@@ -20,7 +20,7 @@
     {% csrf_token %}
     <input type="hidden" name="categoria" value="{{ categoria_selezionata }}"> <!-- per mantenere categoria selezionata -->
     <label for="articolo" class="form-label mt-2">Articolo:</label>
-    <select name="articolo" class="form-select" autofocus>
+    <select name="articolo" id="articolo-nuova-riga" class="form-select" autofocus>
         <option value="">Selezionare un articolo...</option>
         {% for categoria in categorie %}
             {% if categoria.articoli.all %}
@@ -32,6 +32,8 @@
             {% endif %}
         {% endfor %}
     </select>
+    <label for="descrizione-nuova-riga" class="form-label mt-2">Descrizione:</label>
+    <textarea name="descrizione" id="descrizione-nuova-riga" class="form-control" rows="3" placeholder="Proposta dall'articolo selezionato; modificabile per questa sola riga."></textarea>
     <label for="quantita" class="form-label mt-2">Quantità:</label>
     <input type="number" name="quantita" min="1" class="form-control">
 
@@ -97,13 +99,49 @@
     <tbody>
         {% for riga in righe %}
             <tr>
-                <td>{{ riga.articolo.nome }}</td>
-                <td>{{ riga.articolo.descrizione }}</td>
-                <td>{{ riga.prezzo }} €</td>
-                <td>{{ riga.quantita }}</td>
+                <td>
+                    <select name="articolo" form="riga-form-{{ riga.pk }}" class="form-select form-select-sm riga-articolo"
+                            data-articolo-corrente="{{ riga.articolo_id }}"
+                            data-descrizione-personalizzata="{% if riga.descrizione_da_fallback %}false{% elif riga.descrizione_snapshot != riga.articolo.descrizione %}true{% else %}false{% endif %}">
+                        {% for articolo in articoli_modificabili %}
+                            <option value="{{ articolo.pk }}" {% if articolo.pk == riga.articolo_id %}selected{% endif %}>{{ articolo.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td>
+                    <textarea name="descrizione" form="riga-form-{{ riga.pk }}" class="form-control riga-descrizione" rows="{% if riga.articolo.categoria.nome == 'Diciture' %}4{% else %}2{% endif %}">{{ riga.descrizione_documento }}</textarea>
+                    {% if riga.descrizione_da_fallback %}
+                        <small class="text-muted">Testo mostrato dall'anagrafica: lo storico originale non è disponibile. Salva la riga per acquisirlo esplicitamente.</small>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if riga.articolo.categoria.nome == 'Diciture' %}
+                        <span class="text-muted">—</span>
+                    {% else %}
+                        <input type="number" name="prezzo" form="riga-form-{{ riga.pk }}" class="form-control form-control-sm"
+                               value="{{ riga.prezzo }}" min="0" step="0.001" inputmode="decimal" aria-label="Prezzo unitario">
+                    {% endif %}
+                </td>
+                <td>
+                    {% if riga.articolo.categoria.nome == 'Diciture' %}
+                        <span class="text-muted">—</span>
+                    {% else %}
+                        <input type="number" name="quantita" form="riga-form-{{ riga.pk }}" class="form-control form-control-sm"
+                               value="{{ riga.quantita }}" min="1" step="1" inputmode="numeric" aria-label="Quantità">
+                    {% endif %}
+                </td>
                 <td>{{ riga.get_iva_display }}</td>
                 <td>{{ riga.imp }} €</td>
                 <td>
+                    <form method="post" id="riga-form-{{ riga.pk }}" style="display: inline;">
+                        {% csrf_token %}
+                        <input type="hidden" name="categoria" value="{{ categoria_selezionata }}">
+                        <input type="hidden" name="riga_id" value="{{ riga.pk }}">
+                        <button type="submit" name="aggiorna_riga" class="btn btn-primary btn-sm">Salva testo/articolo</button>
+                        {% if riga.articolo.categoria.nome != 'Diciture' %}
+                            <button type="submit" name="aggiorna_importi" class="btn btn-outline-primary btn-sm">Salva quantità/prezzo</button>
+                        {% endif %}
+                    </form>
                     <form method="post" action="{% url 'riga-fattura-delete' riga.pk %}" style="display: inline;">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-danger btn-sm">Elimina</button>
@@ -118,6 +156,37 @@
     </tbody>
 </table>
 </div>
+
+{{ articoli_descrizioni|json_script:"articoli-descrizioni" }}
+<script>
+    (() => {
+        const descrizioni = JSON.parse(document.getElementById('articoli-descrizioni').textContent);
+        const descrizionePer = (articoloId) => descrizioni[String(articoloId)] ?? '';
+
+        const nuovoArticolo = document.getElementById('articolo-nuova-riga');
+        const nuovaDescrizione = document.getElementById('descrizione-nuova-riga');
+        nuovoArticolo?.addEventListener('change', () => {
+            nuovaDescrizione.value = descrizionePer(nuovoArticolo.value);
+        });
+
+        document.querySelectorAll('.riga-articolo').forEach((selettore) => {
+            selettore.addEventListener('change', () => {
+                const descrizione = selettore.closest('tr').querySelector('.riga-descrizione');
+                const descrizionePrecedente = descrizionePer(selettore.dataset.articoloCorrente);
+                const personalizzata = selettore.dataset.descrizionePersonalizzata === 'true' ||
+                    descrizione.value !== descrizionePrecedente;
+                const nuova = descrizionePer(selettore.value);
+
+                if (personalizzata && !window.confirm('La descrizione della riga è personalizzata. Vuoi sostituirla con quella del nuovo articolo?')) {
+                    return;
+                }
+                descrizione.value = nuova;
+                selettore.dataset.articoloCorrente = selettore.value;
+                selettore.dataset.descrizionePersonalizzata = 'false';
+            });
+        });
+    })();
+</script>
 
 <h3>Totale Fattura</h3>
 

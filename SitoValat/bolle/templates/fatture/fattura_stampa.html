@@ -145,7 +145,7 @@
                 {% for riga in bolla.righe.all %}
                 <tr>
                     <td class="cod"><strong>{{ riga.articolo.nome }}</strong></td>
-                    <td class="descr">{{ riga.articolo.descrizione }}</td>
+                    <td class="descr">{{ riga.descrizione_documento|linebreaksbr }}</td>
                     <td class="lotto" align="right">{{ riga.lotto }}</td>
                     <td class="quant" align="right">{{ riga.quantita }}</td>
                 </tr>

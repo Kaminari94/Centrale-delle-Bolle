@@ -109,32 +109,31 @@ def genera_pdf_base64(fattura):
     riga_counter = 0
 
     for riga in fattura.righe.all():
-        if riga_counter >= max_righe_per_pagina:
-            disegna_footer(y_footer)
-            c.showPage()
-            disegna_intestazione()
-            y = altezza-250
-            disegna_tabella_articoli(y)
-            y -= 20
-            riga_counter = 0 #reset contatore righe
-        #Disegna dati della tabella, i vari prodotti
-        c.setFont("Helvetica", 10)
-        c.setLineWidth(1)  # Imposta spessore linea cliente
-        c.drawString(50, y, riga.articolo.nome)
-        c.drawString(110, y, riga.articolo.descrizione)
-        if riga.articolo.categoria.nome == "Diciture":
-            c.line(50, y - 2, 550, y - 2)  # Linea per cliente
+        descrizione = riga.descrizione_documento.splitlines() or [""]
+        e_dicitura = riga.articolo.categoria.nome == "Diciture"
+        for indice, testo in enumerate(descrizione):
+            if riga_counter >= max_righe_per_pagina:
+                disegna_footer(y_footer)
+                c.showPage()
+                disegna_intestazione()
+                y = altezza-250
+                disegna_tabella_articoli(y)
+                y -= 20
+                riga_counter = 0
+            c.setFont("Helvetica", 10)
+            c.setLineWidth(1)
+            if indice == 0:
+                c.drawString(50, y, riga.articolo.nome)
+                if not e_dicitura:
+                    c.drawString(260, y, str(riga.iva)+"%")
+                    c.drawRightString(350, y, str(riga.quantita))
+                    c.drawRightString(440, y, locale.format_string("€ %.3f", riga.prezzo, grouping=True))
+                    c.drawRightString(550, y, locale.format_string("€ %.3f", riga.imp, grouping=True))
+            c.drawString(110, y, testo)
+            if indice == len(descrizione) - 1:
+                c.line(50, y-2, 550, y-2)
             y -= 11
             riga_counter += 1
-            continue
-        c.drawString(260, y, str(riga.iva)+"%")
-        c.drawRightString(350, y, str(riga.quantita))
-
-        c.drawRightString(440, y, locale.format_string("€ %.3f", riga.prezzo, grouping=True))
-        c.drawRightString(550, y, locale.format_string("€ %.3f", riga.imp, grouping=True))
-        c.line(50, y-2, 550, y-2)  # Linea per cliente
-        y -= 11
-        riga_counter += 1
 
     disegna_footer(y_footer)
 
