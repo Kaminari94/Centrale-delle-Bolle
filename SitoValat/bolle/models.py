@@ -18,6 +18,17 @@ def current_year():
     """Restituisce l'anno locale al momento della creazione del record."""
     return timezone.localdate().year
 
+
+QUICKBOLLA_OFFLINE_TIPI = {"CLS", "NT"}
+
+
+def is_quickbolla_offline_tipo(tipo_documento):
+    """True only for the Va.Lat series emitted by QuickBolla offline."""
+    if not tipo_documento or tipo_documento.nome not in QUICKBOLLA_OFFLINE_TIPI:
+        return False
+    concessionario_id = getattr(settings, "QUICKBOLLA_OFFLINE_CONCESSIONARIO_ID", None)
+    return concessionario_id is not None and tipo_documento.concessionario_id == concessionario_id
+
 class Articolo(models.Model):
     IVA_SCELTE = [
         (4, '4%'),
@@ -205,12 +216,28 @@ class Bolla(models.Model):
     data = models.DateTimeField(default=get_aware_datetime, blank=True, null=True)  # Data di creazione
     numero = models.PositiveIntegerField()  # Numero incrementale della bolla
     note = models.TextField(blank=True, null=True)  # Eventuali note aggiuntive
+    anno_emissione = models.PositiveIntegerField(db_index=True)
+    emission_id = models.UUIDField(unique=True, null=True, blank=True, editable=False)
+    sync_payload_hash = models.CharField(max_length=64, blank=True, default="", editable=False)
+    receipt_text = models.TextField(blank=True, default="", editable=False)
+    receipt_renderer = models.CharField(max_length=40, blank=True, default="", editable=False)
+    receipt_width = models.PositiveSmallIntegerField(null=True, blank=True, editable=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tipo_documento", "anno_emissione", "numero"],
+                name="uniq_bolla_tipo_anno_numero",
+            )
+        ]
 
     def save(self, *args, **kwargs):
         skip_auto_number = kwargs.pop('skip_auto_number', False)  # Recuperiamo il flag, DA PROVARE
+        if not self.anno_emissione:
+            self.anno_emissione = (self.data or timezone.now()).year
         if not self.id and not skip_auto_number:  # Controlla se la bolla è nuova
             with transaction.atomic():
-                anno_obb = (self.data or timezone.now()).year
+                anno_obb = self.anno_emissione
 
                 counter, _ = (TipoDocCounter.objects
                 .select_for_update()

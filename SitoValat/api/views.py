@@ -1,19 +1,29 @@
 from datetime import datetime, time, timedelta
+import hashlib
+import json
+import uuid
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from django.db.models import Case, IntegerField, Q, Value, When
+from django.db import IntegrityError, transaction
+from django.db.models import Case, IntegerField, Max, Q, Value, When
 from django.shortcuts import get_object_or_404
-from django.db import transaction
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from bolle.models import Bolla, Cliente, Articolo, TipoDocumento, TipoDocCounter, Zona, RigaCarico, Carico, Reso, RigaReso
+from bolle.models import (
+    Articolo, Bolla, Carico, Cliente, Reso, RigaCarico, RigaReso, TipoDocCounter,
+    TipoDocumento, Zona, is_quickbolla_offline_tipo,
+)
 from .serializers import ArticoloMiniSerializer, BollaListSerializer, BollaDetailSerializer, CustomerMiniSerializer
 from .receipts.renderer import render_ddt
 from django.core.exceptions import ValidationError
 from rest_framework import status
 from bolle.services.codes import normalize_article_code
 from bolle.services.documents import create_bolla_with_lines, replace_bolla_lines
-from bolle.services.rows import allowed_article_ids, parse_quantity, validate_article_lines
+from bolle.services.rows import (
+    allowed_article_ids, create_bolla_row, default_lot_for_article, parse_quantity,
+    validate_article_lines,
+)
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
@@ -150,8 +160,15 @@ def receipt_view(request, pk: int):
 
     bolla = get_object_or_404(qs, pk=pk)
 
+    if bolla.receipt_text:
+        return Response({
+            "width": bolla.receipt_width or 32,
+            "text": bolla.receipt_text,
+            "renderer": bolla.receipt_renderer or "ddt-receipt-v1",
+            "source": "stored",
+        })
     text = render_ddt(bolla)
-    return Response({"width": 32, "text": text})
+    return Response({"width": 32, "text": text, "renderer": "ddt-receipt-v1", "source": "rendered"})
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -213,6 +230,275 @@ def articles_list(request):
     limit = _parse_limit(request)
     data = ArticoloMiniSerializer(qs[:limit], many=True).data
     return Response({"count": len(data), "results": data})
+
+
+def _quickbolla_next_number(tipo_documento, anno):
+    """The next number visible to Django, without reserving or allocating it."""
+    counter_value = (
+        TipoDocCounter.objects.filter(tipo=tipo_documento, anno=anno)
+        .values_list("ultimo_numero", flat=True)
+        .first()
+        or 0
+    )
+    document_value = (
+        Bolla.objects.filter(tipo_documento=tipo_documento, anno_emissione=anno)
+        .aggregate(maximum=Max("numero"))["maximum"]
+        or 0
+    )
+    return max(counter_value, document_value) + 1
+
+
+def _quickbolla_payload_hash(payload):
+    serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _sync_error(detail, *, code="invalid_payload", status_code=status.HTTP_400_BAD_REQUEST):
+    return Response({"code": code, "detail": detail}, status=status_code)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def quickbolla_catalog(request):
+    """Offline catalog and print data for the CLS/NT Va.Lat delivery run."""
+    year_raw = request.query_params.get("year")
+    try:
+        anno = int(year_raw) if year_raw else timezone.localdate().year
+    except (TypeError, ValueError):
+        return _sync_error("Parametro 'year' non valido.")
+    if anno < 2000 or anno > 9999:
+        return _sync_error("Parametro 'year' non valido.")
+
+    tipi = [
+        tipo for tipo in TipoDocumento.objects.select_related("concessionario", "concessionario__cons_conto")
+        .filter(nome__in=["CLS", "NT"]).order_by("nome", "pk")
+        if is_quickbolla_offline_tipo(tipo)
+    ]
+    if not tipi:
+        return Response({"year": anno, "types": [], "customers": [], "articles": []})
+
+    tipo_ids = [tipo.pk for tipo in tipi]
+    clienti = (
+        _apply_customer_scope(Cliente.objects.select_related("proprietario", "tipo_documento_predefinito"), request.user)
+        .filter(tipo_documento_predefinito_id__in=tipo_ids, ignorare=False)
+        .order_by("nome", "pk")
+    )
+
+    article_ids = set()
+    customer_data = []
+    for cliente in clienti:
+        allowed_ids = allowed_article_ids(cliente)
+        article_ids.update(allowed_ids)
+        proprietario = cliente.proprietario
+        customer_data.append({
+            "id": cliente.pk,
+            "nome": cliente.nome,
+            "via": cliente.via,
+            "cap": cliente.cap,
+            "citta": cliente.citta,
+            "piva": cliente.piva,
+            "codice": cliente.codice,
+            "tipo_documento_id": cliente.tipo_documento_predefinito_id,
+            "proprietario": {
+                "nome": proprietario.nome if proprietario else "",
+                "codice": proprietario.codice if proprietario else "",
+            },
+            "_allowed_article_ids": sorted(allowed_ids),
+        })
+
+    articles = Articolo.objects.filter(pk__in=article_ids).order_by("nome")
+    article_data = [
+        {
+            "id": article.pk,
+            "codice": article.nome,
+            "descrizione": article.descrizione or "",
+            "ultimo_lotto": default_lot_for_article(article),
+        }
+        for article in articles
+    ]
+    article_codes_by_id = {article["id"]: article["codice"] for article in article_data}
+    for customer in customer_data:
+        customer["articoli_consentiti"] = [
+            article_codes_by_id[article_id]
+            for article_id in customer.pop("_allowed_article_ids")
+            if article_id in article_codes_by_id
+        ]
+    tipo_data = [
+        {
+            "id": tipo.pk,
+            "nome": tipo.nome,
+            "descrizione": tipo.descrizione or "",
+            "next_number": _quickbolla_next_number(tipo, anno),
+        }
+        for tipo in tipi
+    ]
+    concessionario = tipi[0].concessionario
+    cons_conto = concessionario.cons_conto
+    return Response({
+        "schema_version": 1,
+        "generated_at": timezone.now().isoformat(),
+        "year": anno,
+        "printer": {"renderer": "ddt-receipt-v1", "width": 32, "encoding": "UTF-8"},
+        "concessionario": {
+            "id": concessionario.pk,
+            "nome": concessionario.nome,
+            "indirizzo": concessionario.indirizzo,
+            "partita_iva": concessionario.partita_iva,
+            "telefono": concessionario.telefono or "",
+            "consegna_per_conto_di": (
+                {"nome": cons_conto.nome, "indirizzo": cons_conto.indirizzo} if cons_conto else None
+            ),
+        },
+        "types": tipo_data,
+        "customers": customer_data,
+        "articles": article_data,
+    })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def quickbolla_sync(request):
+    """Persist a document already numbered and printed by QuickBolla offline."""
+    try:
+        emission_id = uuid.UUID(str(request.data.get("emission_id")))
+    except (TypeError, ValueError, AttributeError):
+        return _sync_error("Campo 'emission_id' UUID mancante o non valido.")
+
+    try:
+        customer_id = int(request.data.get("customer_id"))
+        tipo_documento_id = int(request.data.get("tipo_documento_id"))
+        numero = int(request.data.get("numero"))
+        anno_emissione = int(request.data.get("anno_emissione"))
+    except (TypeError, ValueError):
+        return _sync_error("customer_id, tipo_documento_id, numero e anno_emissione devono essere interi.")
+    if numero <= 0 or anno_emissione < 2000 or anno_emissione > 9999:
+        return _sync_error("Numero o anno_emissione non valido.")
+
+    data_emissione = parse_datetime(request.data.get("data_emissione") or "")
+    if data_emissione is None or timezone.is_naive(data_emissione):
+        return _sync_error("data_emissione deve essere ISO-8601 completa di fuso orario.")
+    data_emissione = timezone.localtime(data_emissione)
+    if data_emissione.year != anno_emissione:
+        return _sync_error("anno_emissione deve coincidere con l'anno di data_emissione.")
+
+    cliente = get_object_or_404(
+        _apply_customer_scope(Cliente.objects.select_related("tipo_documento_predefinito"), request.user),
+        pk=customer_id,
+    )
+    tipo_documento = cliente.tipo_documento_predefinito
+    if not tipo_documento or tipo_documento.pk != tipo_documento_id:
+        return _sync_error("Il tipo documento non coincide con quello configurato sul cliente.")
+    if not is_quickbolla_offline_tipo(tipo_documento):
+        return _sync_error("La sincronizzazione offline e consentita solo per CLS e NT di Va.Lat.", code="unsupported_type", status_code=status.HTTP_403_FORBIDDEN)
+
+    righe_input = request.data.get("righe")
+    if not isinstance(righe_input, list) or not righe_input:
+        return _sync_error("'righe' deve essere una lista non vuota.")
+    parsed = []
+    for index, row in enumerate(righe_input, start=1):
+        if not isinstance(row, dict):
+            return _sync_error(f"Riga {index} non valida.")
+        try:
+            quantita = int(row.get("quantita"))
+        except (TypeError, ValueError):
+            return _sync_error(f"Quantita non valida alla riga {index}.")
+        lotto = row.get("lotto")
+        if quantita <= 0 or not isinstance(lotto, str) or not lotto.strip():
+            return _sync_error(f"Quantita o lotto non valido alla riga {index}.")
+        codice = normalize_article_code(str(row.get("codice") or ""))
+        if not codice:
+            return _sync_error(f"Codice mancante alla riga {index}.")
+        parsed.append({"line": index, "codice": codice, "quantita": quantita, "lotto": lotto.strip()})
+
+    articles_by_code, errors = validate_article_lines(cliente, parsed, include_customer_address=True)
+    if errors:
+        return Response({"code": "invalid_lines", "errors": errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    printed_receipt = request.data.get("printed_receipt")
+    if not isinstance(printed_receipt, dict):
+        return _sync_error("printed_receipt mancante o non valido.")
+    receipt_text = printed_receipt.get("text")
+    renderer = printed_receipt.get("renderer")
+    width = printed_receipt.get("width")
+    if not isinstance(receipt_text, str) or not receipt_text or not isinstance(renderer, str):
+        return _sync_error("printed_receipt deve contenere text e renderer.")
+    try:
+        width = int(width)
+    except (TypeError, ValueError):
+        return _sync_error("printed_receipt.width non valido.")
+    if width <= 0:
+        return _sync_error("printed_receipt.width non valido.")
+
+    payload_hash = _quickbolla_payload_hash({
+        "emission_id": str(emission_id),
+        "customer_id": customer_id,
+        "tipo_documento_id": tipo_documento_id,
+        "numero": numero,
+        "anno_emissione": anno_emissione,
+        "data_emissione": data_emissione.isoformat(),
+        "righe": [{"codice": row["codice"], "quantita": row["quantita"], "lotto": row["lotto"]} for row in parsed],
+        "printed_receipt": {"renderer": renderer, "width": width, "text": receipt_text},
+    })
+
+    try:
+        with transaction.atomic():
+            existing = Bolla.objects.filter(emission_id=emission_id).first()
+            if existing:
+                if existing.sync_payload_hash == payload_hash:
+                    return Response({
+                        "status": "already_synced", "bolla_id": existing.pk,
+                        "emission_id": str(emission_id), "numero": existing.numero,
+                        "tipo_documento_id": existing.tipo_documento_id,
+                    })
+                return _sync_error(
+                    "L'emission_id esiste gia con contenuto diverso.",
+                    code="emission_content_conflict", status_code=status.HTTP_409_CONFLICT,
+                )
+
+            conflicting = Bolla.objects.filter(
+                tipo_documento=tipo_documento, anno_emissione=anno_emissione, numero=numero
+            ).first()
+            if conflicting:
+                return Response({
+                    "code": "number_conflict", "tipo_documento_id": tipo_documento.pk,
+                    "anno_emissione": anno_emissione, "numero": numero,
+                    "existing_bolla_id": conflicting.pk,
+                }, status=status.HTTP_409_CONFLICT)
+
+            bolla = Bolla(
+                cliente=cliente, tipo_documento=tipo_documento, data=data_emissione,
+                anno_emissione=anno_emissione, numero=numero, emission_id=emission_id,
+                sync_payload_hash=payload_hash, receipt_text=receipt_text,
+                receipt_renderer=renderer, receipt_width=width,
+            )
+            bolla.save(skip_auto_number=True)
+            for row in parsed:
+                create_bolla_row(bolla, articles_by_code[row["codice"]], row["quantita"], lotto=row["lotto"])
+
+            counter, _ = TipoDocCounter.objects.select_for_update().get_or_create(
+                tipo=tipo_documento, anno=anno_emissione, defaults={"ultimo_numero": 0}
+            )
+            if counter.ultimo_numero < numero:
+                counter.ultimo_numero = numero
+                counter.save(update_fields=["ultimo_numero"])
+                tipo_documento.ultimo_numero = max(tipo_documento.ultimo_numero, numero)
+                tipo_documento.save(update_fields=["ultimo_numero"])
+    except IntegrityError:
+        conflicting = Bolla.objects.filter(
+            tipo_documento=tipo_documento, anno_emissione=anno_emissione, numero=numero
+        ).first()
+        if conflicting:
+            return Response({
+                "code": "number_conflict", "tipo_documento_id": tipo_documento.pk,
+                "anno_emissione": anno_emissione, "numero": numero,
+                "existing_bolla_id": conflicting.pk,
+            }, status=status.HTTP_409_CONFLICT)
+        raise
+
+    return Response({
+        "status": "created", "bolla_id": bolla.pk, "emission_id": str(emission_id),
+        "numero": bolla.numero, "tipo_documento_id": bolla.tipo_documento_id,
+    }, status=status.HTTP_201_CREATED)
 
 
 @api_view(["POST"])
@@ -548,13 +834,14 @@ def delete_view(request, pk: int):
         if bolla != ultima_bolla:
             return Response({"detail": str("Puoi eliminare solo l'ultima bolla di quell'anno per quel tipo documento.")}, status=status.HTTP_400_BAD_REQUEST)
 
-        counter.ultimo_numero -= 1
-        counter.save(update_fields=["ultimo_numero"])
+        if not is_quickbolla_offline_tipo(tipo):
+            counter.ultimo_numero -= 1
+            counter.save(update_fields=["ultimo_numero"])
 
-        # cache (optional)
-        tipo_doc = TipoDocumento.objects.select_for_update().get(pk=tipo.pk)
-        tipo_doc.ultimo_numero = counter.ultimo_numero
-        tipo_doc.save(update_fields=["ultimo_numero"])
+            # cache (optional)
+            tipo_doc = TipoDocumento.objects.select_for_update().get(pk=tipo.pk)
+            tipo_doc.ultimo_numero = counter.ultimo_numero
+            tipo_doc.save(update_fields=["ultimo_numero"])
 
         bolla.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

@@ -1,5 +1,8 @@
 from django.contrib.auth import get_user_model
+from datetime import datetime
+from django.test import override_settings
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from bolle.models import (
@@ -11,6 +14,7 @@ from bolle.models import (
     Concessionario,
     Proprietario,
     TipoDocumento,
+    TipoDocCounter,
     Zona,
 )
 
@@ -296,3 +300,121 @@ class ApiScopingTests(APITestCase):
         self.assertEqual(allowed_response.status_code, 200)
         self.assertEqual([item["id"] for item in allowed_response.data["results"]], [self.articolo.pk])
         self.assertEqual(outside_response.status_code, 404)
+
+
+class QuickBollaOfflineSyncTests(APITestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.conc = Concessionario.objects.create(
+            nome="Va.Lat test", indirizzo="Via Test 1", partita_iva="IT00000000009"
+        )
+        self.user = user_model.objects.create_user(username="quick-offline", password="test")
+        self.conc.user = self.user
+        self.conc.save(update_fields=["user"])
+        self.zona = Zona.objects.create(nome="Giro", concessionario=self.conc, user=user_model.objects.create_user(username="zona-offline", password="test"))
+        self.prop = Proprietario.objects.create(nome="Proprietario", codice="PROP")
+        self.tipo_cls = TipoDocumento.objects.create(nome="CLS", descrizione="DDT CLS", concessionario=self.conc)
+        self.tipo_nt = TipoDocumento.objects.create(nome="NT", descrizione="DDT NT", concessionario=self.conc)
+        self.cliente = Cliente.objects.create(
+            nome="Cliente", concessionario=self.conc, zona=self.zona, proprietario=self.prop,
+            tipo_documento_predefinito=self.tipo_cls, via="Via Cliente 1", cap="84000",
+            citta="Salerno", piva="IT00000000010", codice="C001",
+        )
+        categoria = Categoria.objects.create(nome="Offline")
+        self.articolo = Articolo.objects.create(nome="600100", descrizione="Latte test", categoria=categoria)
+        ArticoliConcessi.objects.create(proprietario=self.prop, articolo=self.articolo)
+        self.client.force_authenticate(self.user)
+
+    def payload(self, *, emission_id, numero, lotto="LOT-TEST", text="ricevuta test"):
+        return {
+            "emission_id": emission_id,
+            "customer_id": self.cliente.pk,
+            "tipo_documento_id": self.tipo_cls.pk,
+            "numero": numero,
+            "anno_emissione": 2026,
+            "data_emissione": "2026-06-10T08:30:00+02:00",
+            "righe": [{"codice": self.articolo.nome, "quantita": 3, "lotto": lotto}],
+            "printed_receipt": {"renderer": "ddt-receipt-v1", "width": 32, "text": text},
+        }
+
+    def offline_settings(self):
+        return override_settings(QUICKBOLLA_OFFLINE_CONCESSIONARIO_ID=self.conc.pk)
+
+    def test_sync_preserves_original_number_lot_and_receipt(self):
+        with self.offline_settings():
+            response = self.client.post(
+                reverse("api_quickbolla_sync"),
+                self.payload(emission_id="f9072a6f-3d76-4d6d-a9e3-1db2b4ba9d6c", numero=10),
+                format="json",
+            )
+        self.assertEqual(response.status_code, 201)
+        bolla = Bolla.objects.get(pk=response.data["bolla_id"])
+        self.assertEqual(bolla.numero, 10)
+        self.assertEqual(bolla.anno_emissione, 2026)
+        self.assertEqual(bolla.righe.get().lotto, "LOT-TEST")
+        self.assertEqual(bolla.receipt_text, "ricevuta test")
+        self.assertEqual(TipoDocCounter.objects.get(tipo=self.tipo_cls, anno=2026).ultimo_numero, 10)
+        receipt = self.client.get(reverse("api_receipt", args=[bolla.pk]))
+        self.assertEqual(receipt.data["source"], "stored")
+        self.assertEqual(receipt.data["text"], "ricevuta test")
+
+    def test_identical_retry_returns_existing_bolla(self):
+        payload = self.payload(emission_id="20e6f009-a6e8-4e18-9eec-502de0e6bf83", numero=10)
+        with self.offline_settings():
+            first = self.client.post(reverse("api_quickbolla_sync"), payload, format="json")
+            retry = self.client.post(reverse("api_quickbolla_sync"), payload, format="json")
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(retry.status_code, 200)
+        self.assertEqual(retry.data["status"], "already_synced")
+        self.assertEqual(retry.data["bolla_id"], first.data["bolla_id"])
+        self.assertEqual(Bolla.objects.count(), 1)
+
+    def test_conflict_with_browser_number_is_explicit(self):
+        with self.offline_settings():
+            browser_bolla = Bolla.objects.create(
+                cliente=self.cliente, tipo_documento=self.tipo_cls,
+                data=timezone.make_aware(datetime(2026, 6, 10, 9, 0)),
+            )
+            response = self.client.post(
+                reverse("api_quickbolla_sync"),
+                self.payload(emission_id="9ec3042f-b6de-40e7-8972-968d0d7c9695", numero=browser_bolla.numero),
+                format="json",
+            )
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data["code"], "number_conflict")
+        self.assertEqual(response.data["existing_bolla_id"], browser_bolla.pk)
+
+    def test_catalog_and_sync_resume_after_browser_emission(self):
+        with self.offline_settings():
+            self.client.post(
+                reverse("api_quickbolla_sync"),
+                self.payload(emission_id="02db3ff0-3381-4bf1-9141-77eaa7f282b2", numero=10),
+                format="json",
+            )
+            browser_bolla = Bolla.objects.create(
+                cliente=self.cliente, tipo_documento=self.tipo_cls,
+                data=timezone.make_aware(datetime(2026, 6, 10, 10, 0)),
+            )
+            catalog = self.client.get(reverse("api_quickbolla_catalog"), {"year": 2026})
+            response = self.client.post(
+                reverse("api_quickbolla_sync"),
+                self.payload(emission_id="3c6c3d31-1c6b-4900-ae99-94a4a0c5a792", numero=12),
+                format="json",
+            )
+        self.assertEqual(browser_bolla.numero, 11)
+        self.assertEqual(catalog.status_code, 200)
+        self.assertEqual(catalog.data["types"][0]["next_number"], 12)
+        self.assertEqual(catalog.data["articles"][0]["ultimo_lotto"], "---")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(TipoDocCounter.objects.get(tipo=self.tipo_cls, anno=2026).ultimo_numero, 12)
+
+    def test_deleting_offline_type_does_not_decrement_counter(self):
+        with self.offline_settings():
+            created = self.client.post(
+                reverse("api_quickbolla_sync"),
+                self.payload(emission_id="c04a1788-aa0c-4a72-a555-84519c21c7c5", numero=10),
+                format="json",
+            )
+            deleted = self.client.delete(reverse("api_delete", args=[created.data["bolla_id"]]))
+        self.assertEqual(deleted.status_code, 204)
+        self.assertEqual(TipoDocCounter.objects.get(tipo=self.tipo_cls, anno=2026).ultimo_numero, 10)

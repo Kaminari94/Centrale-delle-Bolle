@@ -13,5 +13,7 @@ urlpatterns = [
     path("customers/", views.customers_list),
     path("articles/", views.articles_list, name="api_articles_list"),
     path("bolle/quick/", views.bolle_quick_create),
+    path("bolle/quick/catalog/", views.quickbolla_catalog, name="api_quickbolla_catalog"),
+    path("bolle/quick/sync/", views.quickbolla_sync, name="api_quickbolla_sync"),
     path("movim/", views.movim_quick_create),
 ]

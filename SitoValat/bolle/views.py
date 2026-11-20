@@ -325,13 +325,14 @@ class BollaDeleteView(DeleteView):
                 messages.error(request, "Puoi eliminare solo l'ultima bolla di quell'anno per quel tipo documento.")
                 return redirect('bolle-list')
 
-            counter.ultimo_numero -= 1
-            counter.save(update_fields=["ultimo_numero"])
+            if not is_quickbolla_offline_tipo(tipo):
+                counter.ultimo_numero -= 1
+                counter.save(update_fields=["ultimo_numero"])
 
-            # cache (optional)
-            tipo_doc = TipoDocumento.objects.select_for_update().get(pk=tipo.pk)
-            tipo_doc.ultimo_numero = counter.ultimo_numero
-            tipo_doc.save(update_fields=["ultimo_numero"])
+                # cache (optional)
+                tipo_doc = TipoDocumento.objects.select_for_update().get(pk=tipo.pk)
+                tipo_doc.ultimo_numero = counter.ultimo_numero
+                tipo_doc.save(update_fields=["ultimo_numero"])
 
             bolla.delete()
 
